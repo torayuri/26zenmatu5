@@ -784,9 +784,15 @@ function setCustomVars(c1, c2) {
   }).forEach(([k,v]) => document.documentElement.style.setProperty(k,v));
 }
 
+function syncThemeColor() {
+  const c = getComputedStyle(document.body).getPropertyValue('--p1').trim();
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m && c) m.setAttribute('content', c);
+}
 function applyTheme(t) {
   clearCustomVars();
   document.body.className = t ? 'theme-'+t : '';
+  syncThemeColor();
   document.querySelectorAll('.t-opt').forEach(el => el.classList.toggle('active', el.dataset.theme === t));
   localStorage.setItem('tc-theme', t);
 }
@@ -823,6 +829,7 @@ function applyCustomThemeFromPicker() {
   clearCustomVars();
   setCustomVars(c1, c2);
   document.body.className = 'theme-custom';
+  syncThemeColor();
   document.querySelectorAll('.t-opt').forEach(el => el.classList.toggle('active', el.dataset.theme === 'custom'));
   document.getElementById('custom-swatch').style.background = `linear-gradient(135deg,${c1},${c2})`;
   localStorage.setItem('tc-theme','custom');
@@ -839,6 +846,7 @@ function applyCustomThemeFromPicker() {
     const c2 = localStorage.getItem('tc-custom-c2') || '#6dd5ed';
     setCustomVars(c1, c2);
     document.body.className = 'theme-custom';
+    syncThemeColor();
     document.querySelectorAll('.t-opt').forEach(el => el.classList.toggle('active', el.dataset.theme === 'custom'));
     const sw = document.getElementById('custom-swatch');
     if (sw) sw.style.background = `linear-gradient(135deg,${c1},${c2})`;
