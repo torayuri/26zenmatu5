@@ -227,8 +227,6 @@
     /* ── background image ── */
     .bg-section{margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
     .bg-upload-btn{width:100%;padding:12px;border:2px dashed var(--ul-border);border-radius:12px;background:none;color:var(--badge-fg);font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-    .bg-preset-btn{margin-top:8px;width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--title);font-size:14px;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent;}
-    .bg-preset-thumb{width:44px;height:44px;border-radius:10px;flex-shrink:0;background-size:88px;border:1px solid var(--border);}
     .bg-clear-btn{margin-top:8px;width:100%;padding:10px;border:none;border-radius:12px;background:var(--border);color:var(--sub);font-size:13px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 
     /* ── stamp ── */
@@ -380,10 +378,6 @@
     <div class="fmt-label">背景画像</div>
     <input type="file" id="bg-file-input" accept="image/*" style="display:none">
     <button class="bg-upload-btn" onclick="document.getElementById('bg-file-input').click()">📷 背景画像をアップロード</button>
-    <button class="bg-preset-btn" onclick="setPresetBg('memo')">
-      <span class="bg-preset-thumb" id="bg-preset-memo-thumb"></span>
-      <span>メモ＆ペン柄の背景にする</span>
-    </button>
     <button class="bg-clear-btn" id="bg-clear-btn" onclick="clearBgImage()" style="display:none">背景画像をリセット</button>
   </div>
 </div>
@@ -1455,71 +1449,10 @@ function downloadAll() {
 
 /* ── Background image ── */
 const BG_KEY = 'tc-bg';
-/* プリセット背景（SVGの柄をタイル状に並べる） */
-const BG_PRESETS = {
-  memo: () => {
-    const K = '#1a1a1a', G = '#3fae7f', GD = '#2f8a63', B = '#d8cbbd';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
-<rect width="260" height="260" fill="#fbf7f0"/>
-<g opacity="0.4">
-<g fill="none" stroke="${K}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-  <!-- まるい顔 -->
-  <circle cx="62" cy="62" r="38" fill="#ffffff"/>
-  <!-- メモ帳 -->
-  <g transform="rotate(-10 190 70)">
-    <rect x="162" y="38" width="56" height="66" rx="6" fill="${G}"/>
-    <path d="M172 34v12M184 34v12M196 34v12M208 34v12"/>
-    <path d="M172 62h34M172 74h28M172 86h32" stroke="${GD}" stroke-width="4"/>
-  </g>
-  <!-- ペン -->
-  <g transform="rotate(32 70 190)">
-    <rect x="62" y="150" width="16" height="66" rx="4" fill="${G}"/>
-    <path d="M62 216l8 18 8-18" fill="#ffffff"/>
-    <path d="M62 166h16"/>
-  </g>
-  <!-- 小さいメモ帳 -->
-  <g transform="rotate(14 196 196)">
-    <rect x="178" y="176" width="38" height="44" rx="5" fill="${G}"/>
-    <path d="M186 172v9M197 172v9M208 172v9"/>
-  </g>
-</g>
-<g fill="${K}">
-  <circle cx="50" cy="62" r="4.5"/><circle cx="74" cy="62" r="4.5"/>
-</g>
-<g fill="${B}">
-  <ellipse cx="46" cy="49" rx="6" ry="3.5"/><ellipse cx="78" cy="49" rx="6" ry="3.5"/>
-  <circle cx="128" cy="128" r="4"/><circle cx="236" cy="128" r="3"/><circle cx="128" cy="236" r="3"/><circle cx="20" cy="140" r="3.5"/>
-</g>
-<path d="M56 75q6 5 12 0" fill="none" stroke="${K}" stroke-width="4" stroke-linecap="round"/>
-</g>
-</svg>`;
-    return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
-  },
-};
-function setPresetBg(name) {
-  saveBgImage('preset:' + name);
-  loadBgImage();
-  closeTheme();
-}
-function initPresetThumbs() {
-  const t = document.getElementById('bg-preset-memo-thumb');
-  if (t) t.style.backgroundImage = BG_PRESETS.memo();
-}
-initPresetThumbs();
-
 function loadBgImage() {
   const bg = localStorage.getItem(BG_KEY);
   const clearBtn = document.getElementById('bg-clear-btn');
-  if (bg && bg.startsWith('preset:') && BG_PRESETS[bg.slice(7)]) {
-    const st = document.body.style;
-    st.backgroundImage = BG_PRESETS[bg.slice(7)]();
-    st.backgroundSize = '170px 170px';
-    st.backgroundRepeat = 'repeat';
-    st.backgroundAttachment = 'fixed';
-    st.backgroundPosition = '0 0';
-    if (clearBtn) clearBtn.style.display = 'block';
-  } else if (bg) {
-    document.body.style.backgroundRepeat = '';
+  if (bg) {
     document.body.style.cssText += ';background-image:url(' + bg + ');background-size:cover;background-attachment:fixed;background-position:center;';
     if (clearBtn) clearBtn.style.display = 'block';
   } else {
