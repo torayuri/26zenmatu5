@@ -16,12 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
     :root{--p1:#2193b0;--p2:#6dd5ed;--s1:#11998e;--s2:#38ef7d;--bg:#e8f6f8;--card-bg:#ffffff;--title:#1a202c;--sub:#718096;--border:#e2e8f0;--badge-bg:#d4eef7;--badge-fg:#2193b0;--ul-border:#2193b0;--ul-hover:#d4eef7;}
-    body.theme-ocean {--p1:#2193b0;--p2:#6dd5ed;--s1:#11998e;--s2:#38ef7d;--bg:#e8f6f8;--badge-bg:#d4eef7;--badge-fg:#2193b0;--ul-border:#2193b0;--ul-hover:#d4eef7;}
     body.theme-dark  {--p1:#888888;--p2:#aaaaaa;--s1:#666666;--s2:#cccccc;--bg:#0f0f0f;--card-bg:#1a1a1a;--title:#f0f0f0;--sub:#888888;--border:#2a2a2a;--badge-bg:#222222;--badge-fg:#aaaaaa;--ul-border:#666666;--ul-hover:#222222;}
     body.theme-light {--p1:#343a40;--p2:#6c757d;--s1:#20c997;--s2:#12b886;--bg:#f8f9fa;--badge-bg:#e9ecef;--badge-fg:#343a40;--ul-border:#6c757d;--ul-hover:#e9ecef;}
-    body.theme-ichigo{--p1:#c9184a;--p2:#ff4d6d;--s1:#ff85a1;--s2:#fbb1bd;--bg:#fff0f3;--badge-bg:#fde2e4;--badge-fg:#c9184a;--ul-border:#c9184a;--ul-hover:#fde2e4;}
-    body.theme-matcha{--p1:#4f6f52;--p2:#739072;--s1:#a9c9a4;--s2:#d8efd3;--bg:#f0f4e3;--badge-bg:#d8efd3;--badge-fg:#4f6f52;--ul-border:#4f6f52;--ul-hover:#d8efd3;}
-    body.theme-cotton{--p1:#ff6fa3;--p2:#9ed9ff;--s1:#c4b5fd;--s2:#f0abfc;--bg:#fff0f8;--badge-bg:#ffe4f2;--badge-fg:#d946a8;--ul-border:#ff6fa3;--ul-hover:#ffe4f2;}
 
     *{margin:0;padding:0;box-sizing:border-box;}
     :root{--sys-font:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif;}
@@ -367,12 +363,8 @@
   <div class="panel-handle"></div>
   <div class="panel-title">テーマを選択</div>
   <div class="t-opts">
-    <button class="t-opt" data-theme="ocean"  onclick="setTheme('ocean')"> <span class="t-swatch" style="background:linear-gradient(135deg,#2193b0,#6dd5ed)"></span><span class="t-name">オーシャン</span></button>
     <button class="t-opt" data-theme="dark"   onclick="setTheme('dark')">  <span class="t-swatch" style="background:linear-gradient(135deg,#0f0f0f,#888888)"></span><span class="t-name">ダーク</span></button>
     <button class="t-opt" data-theme="light"  onclick="setTheme('light')"> <span class="t-swatch" style="background:linear-gradient(135deg,#f8f9fa,#6c757d)"></span><span class="t-name">ライト</span></button>
-    <button class="t-opt" data-theme="ichigo" onclick="setTheme('ichigo')"><span class="t-swatch" style="background:linear-gradient(135deg,#c9184a,#fbb1bd)"></span><span class="t-name">イチゴ</span></button>
-    <button class="t-opt" data-theme="matcha" onclick="setTheme('matcha')"><span class="t-swatch" style="background:linear-gradient(135deg,#4f6f52,#d8efd3)"></span><span class="t-name">抹茶</span></button>
-    <button class="t-opt" data-theme="cotton" onclick="setTheme('cotton')"><span class="t-swatch" style="background:linear-gradient(135deg,#ff6fa3,#9ed9ff)"></span><span class="t-name">わたあめ</span></button>
     <button class="t-opt" data-theme="custom" onclick="toggleCustomPicker()"><span class="t-swatch" id="custom-swatch" style="background:conic-gradient(#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)"></span><span class="t-name">カスタム</span></button>
   </div>
   <div class="custom-picker" id="custom-picker" style="display:none">
@@ -916,7 +908,8 @@ function renderFontGrid() {
 
 /* ── Init theme ── */
 (function() {
-  const saved = localStorage.getItem('tc-theme') || 'light';
+  let saved = localStorage.getItem('tc-theme') || 'light';
+  if (!['dark','light','custom'].includes(saved)) saved = 'light'; // 削除したテーマを使っていた場合
   if (saved === 'custom') {
     const c1 = localStorage.getItem('tc-custom-c1') || '#2193b0';
     const c2 = localStorage.getItem('tc-custom-c2') || '#6dd5ed';
