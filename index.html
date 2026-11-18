@@ -271,16 +271,29 @@
     .cal-day.sun{color:#ef4444;} .cal-day.sat{color:#3b82f6;}
     .cal-day.dim{color:var(--sub);font-weight:normal;}
     .stamp-img{width:82%;height:82%;object-fit:contain;}
-    .cal-cell.lv1{background:rgba(34,197,94,.16);} .cal-cell.lv2{background:rgba(34,197,94,.32);}
-    .cal-cell.lv3{background:rgba(34,197,94,.5);}  .cal-cell.lv4{background:rgba(34,197,94,.72);}
-    .cal-cell.lv4 .cal-day,.cal-cell.lv3 .cal-day{color:#0b3d1e;}
-    .cal-cell.sel{outline:2px solid var(--title);outline-offset:-2px;}
-    .cal-cell{cursor:pointer;-webkit-tap-highlight-color:transparent;}
-    .heat-legend{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--sub);margin-top:10px;}
-    .heat-legend i{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid var(--border);}
-    .heat-info{font-size:13px;color:var(--title);margin-top:8px;min-height:18px;line-height:1.6;}
-    .heat-info .sub{color:var(--sub);font-size:12px;}
-    .heat-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--sub);font-weight:bold;}
+    .plant-card{width:100%;background:var(--card-bg);border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.07);margin-top:20px;display:flex;gap:16px;align-items:center;}
+    .plant-card svg{width:110px;height:132px;flex-shrink:0;}
+    .plant-title{font-size:12px;font-weight:bold;color:var(--sub);}
+    .plant-name{font-size:20px;font-weight:bold;color:var(--title);margin:2px 0 4px;}
+    .plant-stage{display:inline-block;font-size:12px;font-weight:bold;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#15803d;}
+    .plant-msg{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.6;}
+    .plant-bar{height:8px;border-radius:4px;background:var(--border);overflow:hidden;margin-top:8px;}
+    .plant-bar div{height:100%;background:linear-gradient(90deg,#86efac,#22c55e);}
+    .garden{width:100%;background:var(--card-bg);border-radius:16px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,.07);margin-top:16px;}
+    .garden-title{font-size:14px;font-weight:bold;color:var(--title);margin-bottom:4px;}
+    .garden-sub{font-size:12px;color:var(--sub);margin-bottom:10px;}
+    .garden-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;}
+    .garden-cell{border-radius:10px;background:var(--bg);padding:4px 2px 2px;text-align:center;cursor:pointer;border:2px solid transparent;-webkit-tap-highlight-color:transparent;}
+    .garden-cell.sel{border-color:var(--p1);}
+    .garden-cell svg{width:100%;height:auto;display:block;}
+    .garden-cell span{font-size:10px;color:var(--sub);}
+    .garden-info{font-size:13px;color:var(--title);margin-top:10px;min-height:18px;line-height:1.6;}
+    .garden-info .sub{color:var(--sub);font-size:12px;}
+    .plant-pop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:950;display:none;align-items:center;justify-content:center;padding:20px;}
+    .plant-pop.open{display:flex;}
+    .plant-pop-box{background:var(--card-bg);border-radius:24px;padding:24px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+    .plant-pop-box svg{width:140px;height:168px;}
+    .plant-pop-box .save-btn{margin-top:16px;}
     .cal-day-small{position:absolute;bottom:1px;right:3px;font-size:8px;color:var(--sub);line-height:1;}
     .stamp-press-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--p1),var(--p2));color:white;border:none;border-radius:16px;font-size:17px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s,opacity .15s;}
     .stamp-press-btn:active{transform:scale(.97);}
@@ -571,16 +584,15 @@
   </div>
   <div class="cal-wrap">
     <div class="cal-grid" id="stamp-cal"></div>
-    <div class="heat-toggle">
-      <span>勉強時間を色で表示</span>
-      <button class="toggle-sw" id="heat-toggle-btn" onclick="toggleHeat()"></button>
-    </div>
-    <div id="heat-extra">
-      <div class="heat-legend">少 <i style="background:transparent"></i><i style="background:rgba(34,197,94,.16)"></i><i style="background:rgba(34,197,94,.32)"></i><i style="background:rgba(34,197,94,.5)"></i><i style="background:rgba(34,197,94,.72)"></i> 多</div>
-      <div class="heat-info" id="heat-info"></div>
-    </div>
   </div>
   <button class="stamp-press-btn" id="stamp-press-btn" onclick="pressStamp()">今日のスタンプを押す！</button>
+  <div class="plant-card" id="plant-today"></div>
+  <div class="garden">
+    <div class="garden-title" id="garden-title">🌱 今月のお庭</div>
+    <div class="garden-sub">毎日ちがう植物がやってくるよ。勉強した時間だけ育つ！</div>
+    <div class="garden-grid" id="garden-grid"></div>
+    <div class="garden-info" id="garden-info"></div>
+  </div>
 </div>
 
 <!-- ⑦ Timer -->
@@ -778,6 +790,11 @@
   <div class="panel-title">スタンプを選ぼう</div>
   <input type="file" id="stamp-img-input" accept="image/*" style="display:none">
   <div class="stamp-sel-grid" id="stamp-sel-grid"></div>
+</div>
+
+<!-- 今日の植物ポップアップ -->
+<div class="plant-pop" id="plant-pop" onclick="if(event.target===this)closePlantPop()">
+  <div class="plant-pop-box" id="plant-pop-box"></div>
 </div>
 
 <!-- Fullscreen timer overlay -->
@@ -1659,18 +1676,45 @@ function toDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padS
 
 function goStamp() {
   const now = new Date(); stampYear = now.getFullYear(); stampMonth = now.getMonth();
-  heatSelDate = toDateStr(now);
+  gardenSel = toDateStr(now);
   renderStampCal(); showScreen('stamp-screen');
 }
 function prevMonth() { if (--stampMonth < 0) { stampMonth=11; stampYear--; } renderStampCal(); }
 function nextMonth() { if (++stampMonth > 11) { stampMonth=0; stampYear++; } renderStampCal(); }
 
-/* 勉強時間の草（カレンダーの背景色） */
-let heatSelDate = null;
-function heatOn() { try { return localStorage.getItem('tc-heat') !== 'off'; } catch { return true; } }
-function toggleHeat() {
-  try { localStorage.setItem('tc-heat', heatOn() ? 'off' : 'on'); } catch {}
-  renderStampCal();
+/* ── 植物を育てる ── */
+// 毎日ちがう植物。勉強時間で 種→芽→若葉→つぼみ→満開 と育つ
+const PLANTS = [
+  { name: 'ひまわり',     type: 'flower', petal: '#facc15', center: '#78350f', n: 14, pw: .28 },
+  { name: 'チューリップ', type: 'tulip',  petal: '#ef4444' },
+  { name: 'さくら',       type: 'tree',   petal: '#f9a8d4' },
+  { name: 'サボテン',     type: 'cactus', petal: '#f472b6' },
+  { name: 'コスモス',     type: 'flower', petal: '#f472b6', center: '#facc15', n: 8, pw: .38 },
+  { name: 'ラベンダー',   type: 'spike',  petal: '#a78bfa' },
+  { name: 'あさがお',     type: 'flower', petal: '#60a5fa', center: '#ffffff', n: 5, pw: .62 },
+  { name: 'たんぽぽ',     type: 'flower', petal: '#fde047', center: '#eab308', n: 22, pw: .16 },
+  { name: 'バラ',         type: 'flower', petal: '#e11d48', center: '#9f1239', n: 9, pw: .5, inner: true },
+  { name: 'もみじ',       type: 'tree',   petal: '#f97316' },
+  { name: 'マーガレット', type: 'flower', petal: '#ffffff', center: '#facc15', n: 12, pw: .3 },
+  { name: 'きいろチューリップ', type: 'tulip', petal: '#facc15' },
+];
+const PLANT_STAGES = [
+  { name: '種',     min: 0  },
+  { name: '芽',     min: 1  },
+  { name: '若葉',   min: 30 },
+  { name: 'つぼみ', min: 60 },
+  { name: '満開',   min: 90 },
+];
+function plantForDate(ds) {
+  const [y, m, d] = ds.split('-').map(Number);
+  const day = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+  return PLANTS[((day * 5) % PLANTS.length + PLANTS.length) % PLANTS.length]; // 12日で全種類が一巡、前の日と必ず違う
+}
+function plantStage(sec) {
+  const min = sec / 60;
+  let st = 0;
+  PLANT_STAGES.forEach((s, i) => { if (i && min >= s.min) st = i; });
+  return st;
 }
 function studyByDate() {
   const map = {};
@@ -1681,39 +1725,139 @@ function studyByDate() {
   });
   return map;
 }
-function heatLevel(sec) {
-  if (!sec) return 0;
-  if (sec < 30 * 60) return 1;
-  if (sec < 60 * 60) return 2;
-  if (sec < 120 * 60) return 3;
-  return 4;
-}
-function selectHeatDay(ds) { heatSelDate = ds; renderStampCal(); }
-function renderHeatInfo(byDate) {
-  const el = document.getElementById('heat-info');
-  const prefix = `${stampYear}-${String(stampMonth + 1).padStart(2, '0')}-`;
-  let monthTotal = 0, days = 0;
-  Object.entries(byDate).forEach(([d, v]) => { if (d.startsWith(prefix)) { monthTotal += v.total; days++; } });
-  let html = `<div class="sub">${stampMonth + 1}月の合計：${monthTotal ? fmtDuration(monthTotal) : '0分'}（${days}日勉強）</div>`;
-  if (heatSelDate && heatSelDate.startsWith(prefix)) {
-    const [, mm, dd] = heatSelDate.split('-').map(Number);
-    const v = byDate[heatSelDate];
-    if (v) {
-      const subs = Object.entries(v.subj).sort((a, b) => b[1] - a[1]).map(([k, t]) => `${escapeHtml(k)} ${fmtDuration(t)}`).join('、');
-      html = `<div><b>${mm}/${dd}</b>：${fmtDuration(v.total)}</div><div class="sub">${subs}</div>` + html;
-    } else {
-      html = `<div><b>${mm}/${dd}</b>：記録なし</div>` + html;
+
+// 植物の絵（SVG）
+function plantSvg(pl, st) {
+  const G = '#22c55e', GD = '#15803d', K = '#78350f';
+  let g = '';
+  const leaf = (x, y, rot, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${7*s}" ry="${3.2*s}" fill="${G}" transform="rotate(${rot} ${x} ${y})"/>`;
+  const stem = (h) => `<path d="M50 90 Q${50 + h * .06} ${90 - h / 2} 50 ${90 - h}" stroke="${GD}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  const petals = (cx, cy, r, n, pw, col) => {
+    let p = '';
+    for (let i = 0; i < n; i++) {
+      const a = 360 / n * i;
+      p += `<ellipse cx="${cx}" cy="${cy - r * .62}" rx="${r * pw}" ry="${r * .5}" fill="${col}" stroke="rgba(0,0,0,.08)" transform="rotate(${a} ${cx} ${cy})"/>`;
+    }
+    return p;
+  };
+  if (st === 0) {
+    g += `<ellipse cx="50" cy="88" rx="5" ry="3.5" fill="#a16207"/><path d="M48 86 q2 -3 4 0" stroke="#713f12" stroke-width="1" fill="none"/>`;
+  } else if (pl.type === 'tree') {
+    const h = [0, 14, 26, 42, 46][st];
+    g += `<rect x="47" y="${90 - h}" width="6" height="${h}" rx="2" fill="#92400e"/>`;
+    if (st === 1) g += leaf(55, 90 - h, -20) + leaf(45, 90 - h, 20);
+    else {
+      const r = [0, 0, 14, 22, 25][st], cy = 90 - h - r * .4;
+      g += `<circle cx="50" cy="${cy}" r="${r}" fill="${G}"/><circle cx="${50 - r * .6}" cy="${cy + r * .3}" r="${r * .6}" fill="${G}"/><circle cx="${50 + r * .6}" cy="${cy + r * .3}" r="${r * .6}" fill="${G}"/>`;
+      if (st >= 3) {
+        const pts = [[-12,-8],[8,-14],[14,4],[-4,6],[-16,8],[2,-4],[16,-6],[-8,-16],[10,12],[-14,-2]];
+        pts.slice(0, st === 3 ? 4 : 10).forEach(([dx, dy]) =>
+          g += `<circle cx="${50 + dx}" cy="${cy + dy}" r="${st === 3 ? 2.2 : 3.6}" fill="${pl.petal}"/>`);
+      }
+    }
+  } else if (pl.type === 'cactus') {
+    const h = [0, 10, 22, 36, 38][st];
+    g += `<rect x="42" y="${90 - h}" width="16" height="${h + 2}" rx="8" fill="${G}"/>`;
+    if (st >= 3) g += `<path d="M42 ${76 - h / 3} h-6 a4 4 0 0 1 -4 -4 v-8" stroke="${G}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M58 ${82 - h / 3} h6 a4 4 0 0 0 4 -4 v-10" stroke="${G}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+    g += `<path d="M50 ${92 - h} v${h - 4}" stroke="${GD}" stroke-width="1" opacity=".5"/>`;
+    if (st === 3) g += `<ellipse cx="50" cy="${88 - h}" rx="3" ry="4" fill="${pl.petal}"/>`;
+    if (st === 4) g += petals(50, 86 - h, 10, 8, .3, pl.petal) + `<circle cx="50" cy="${86 - h}" r="3" fill="#fde047"/>`;
+  } else {
+    const h = [0, 14, 30, 48, 52][st], top = 90 - h;
+    g += stem(h);
+    if (st === 1) g += leaf(55, top + 2, -25, .8) + leaf(45, top + 2, 25, .8);
+    if (st >= 2) g += leaf(57, 80, -20) + leaf(43, 74, 20) + (st >= 3 ? leaf(57, 64, -30, .9) + leaf(43, 58, 30, .9) : '');
+    if (pl.type === 'spike') {
+      if (st >= 3) {
+        [[-9, 6, -12], [0, 0, 0], [9, 6, 12]].forEach(([dx, dy, rot]) => {
+          for (let i = 0; i < 6; i++) g += `<ellipse cx="${50 + dx + i * rot / 12}" cy="${top + dy - i * 4.5}" rx="3" ry="2.6" fill="${st === 4 ? pl.petal : '#86efac'}"/>`;
+        });
+      }
+    } else if (st === 3) {
+      g += `<ellipse cx="50" cy="${top - 5}" rx="5.5" ry="8" fill="${pl.petal}" stroke="rgba(0,0,0,.1)"/><path d="M44 ${top - 1} q6 6 12 0" fill="${G}"/>`;
+    } else if (st === 4) {
+      if (pl.type === 'tulip') {
+        g += `<path d="M38 ${top - 16} q2 18 12 18 q10 0 12 -18 l-6 6 l-6 -10 l-6 10 z" fill="${pl.petal}" stroke="rgba(0,0,0,.12)"/>`;
+      } else {
+        const r = 18;
+        g += petals(50, top - 6, r, pl.n, pl.pw, pl.petal);
+        if (pl.inner) g += petals(50, top - 6, r * .6, 6, .55, pl.center);
+        g += `<circle cx="50" cy="${top - 6}" r="${r * (pl.inner ? .22 : .36)}" fill="${pl.center}"/>`;
+      }
     }
   }
-  el.innerHTML = html;
+  // 植木鉢
+  return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${g}
+<ellipse cx="50" cy="90" rx="24" ry="4" fill="#78350f"/>
+<path d="M28 92 h44 l-5 26 h-34 z" fill="#c2703d"/><rect x="25" y="87" width="50" height="8" rx="3" fill="#d9824a"/></svg>`;
 }
+
+function plantNextMsg(sec, st) {
+  if (st >= 4) return '満開！今日もよくがんばったね 🎉';
+  const next = PLANT_STAGES[st + 1], left = Math.max(1, Math.ceil(next.min - sec / 60));
+  return st === 0 ? 'まだ種のまま。勉強すると芽が出るよ' : `あと${left}分勉強すると「${next.name}」に育つよ`;
+}
+function plantProgress(sec) {
+  return Math.min(100, sec / 60 / PLANT_STAGES[4].min * 100);
+}
+function renderPlantToday() {
+  const ds = toDateStr(new Date()), pl = plantForDate(ds);
+  const sec = studyByDate()[ds]?.total || 0, st = plantStage(sec);
+  document.getElementById('plant-today').innerHTML = `${plantSvg(pl, st)}
+    <div style="flex:1;min-width:0">
+      <div class="plant-title">今日の植物</div>
+      <div class="plant-name">${pl.name}</div>
+      <span class="plant-stage">${PLANT_STAGES[st].name}</span>
+      <div class="plant-bar"><div style="width:${plantProgress(sec)}%"></div></div>
+      <div class="plant-msg">今日 ${sec ? fmtDuration(sec) : '0分'}<br>${plantNextMsg(sec, st)}</div>
+    </div>`;
+}
+let gardenSel = null;
+function renderGarden() {
+  const byDate = studyByDate(), today = new Date(), todayStr = toDateStr(today);
+  const daysInM = new Date(stampYear, stampMonth + 1, 0).getDate();
+  document.getElementById('garden-title').textContent = `🌱 ${stampMonth + 1}月のお庭`;
+  let html = '', bloomed = 0;
+  for (let d = 1; d <= daysInM; d++) {
+    const dt = new Date(stampYear, stampMonth, d), ds = toDateStr(dt);
+    if (dt > today && ds !== todayStr) break;
+    const st = plantStage(byDate[ds]?.total || 0);
+    if (st === 4) bloomed++;
+    html += `<div class="garden-cell ${ds === gardenSel ? 'sel' : ''}" onclick="selectGarden('${ds}')">${plantSvg(plantForDate(ds), st)}<span>${d}日</span></div>`;
+  }
+  document.getElementById('garden-grid').innerHTML = html || '<div class="garden-sub">まだこの月の植物はありません</div>';
+  const info = document.getElementById('garden-info');
+  let txt = `<div class="sub">満開にできた日：${bloomed}日</div>`;
+  if (gardenSel && gardenSel.startsWith(`${stampYear}-${String(stampMonth + 1).padStart(2, '0')}-`)) {
+    const v = byDate[gardenSel], [, mm, dd] = gardenSel.split('-').map(Number);
+    const pl = plantForDate(gardenSel), st = plantStage(v?.total || 0);
+    const subs = v ? Object.entries(v.subj).sort((a, b) => b[1] - a[1]).map(([k, t]) => `${escapeHtml(k)} ${fmtDuration(t)}`).join('、') : '';
+    txt = `<div><b>${mm}/${dd}</b> ${pl.name}（${PLANT_STAGES[st].name}）：${v ? fmtDuration(v.total) : '勉強なし'}</div>${subs ? `<div class="sub">${subs}</div>` : ''}` + txt;
+  }
+  info.innerHTML = txt;
+}
+function selectGarden(ds) { gardenSel = ds; renderGarden(); }
+
+// その日はじめて開いたときに「今日の植物」をお知らせ
+function showPlantPop(force) {
+  const ds = toDateStr(new Date());
+  let seen = ''; try { seen = localStorage.getItem('tc-plant-seen') || ''; } catch {}
+  if (!force && seen === ds) return;
+  try { localStorage.setItem('tc-plant-seen', ds); } catch {}
+  const pl = plantForDate(ds), sec = studyByDate()[ds]?.total || 0, st = plantStage(sec);
+  document.getElementById('plant-pop-box').innerHTML = `
+    <div class="plant-title">${new Date().getHours() < 11 ? 'おはよう！' : ''}今日の植物は…</div>
+    ${plantSvg(pl, 4)}
+    <div class="plant-name">${pl.name}</div>
+    <div class="plant-msg">${PLANT_STAGES[4].min}分勉強すると、こんなふうに咲くよ！<br>${st ? plantNextMsg(sec, st) : '今はまだ種。さっそく育てよう 🌱'}</div>
+    <button class="save-btn" onclick="closePlantPop()">がんばる！</button>`;
+  document.getElementById('plant-pop').classList.add('open');
+}
+function closePlantPop() { document.getElementById('plant-pop').classList.remove('open'); }
 
 function renderStampCal() {
   document.getElementById('stamp-month-label').textContent = `${stampYear}年${stampMonth+1}月`;
   const stamps = loadStamps(), imgs = loadStampImgs();
-  const showHeat = heatOn(), byDate = showHeat ? studyByDate() : {};
-  document.getElementById('heat-toggle-btn').classList.toggle('on', showHeat);
-  document.getElementById('heat-extra').style.display = showHeat ? '' : 'none';
   const today = new Date(), todayStr = toDateStr(today);
   const firstDow = new Date(stampYear, stampMonth, 1).getDay();
   const daysInM  = new Date(stampYear, stampMonth+1, 0).getDate();
@@ -1729,12 +1873,11 @@ function renderStampCal() {
     const inner = idx >= 0 && imgs[idx]
       ? `<img src="${imgs[idx]}" class="stamp-img" alt="stamp"><span class="cal-day-small">${d}</span>`
       : `<span class="cal-day ${dowCls} ${isFuture?'dim':''}">${d}</span>`;
-    const lv = showHeat ? heatLevel(byDate[ds]?.total) : 0;
-    const sel = showHeat && ds === heatSelDate ? 'sel' : '';
-    html += `<div class="cal-cell ${isToday?'cal-today':''} ${isFuture?'cal-future':''} ${lv?'lv'+lv:''} ${sel}" onclick="selectHeatDay('${ds}')">${inner}</div>`;
+    html += `<div class="cal-cell ${isToday?'cal-today':''} ${isFuture?'cal-future':''}">${inner}</div>`;
   }
   document.getElementById('stamp-cal').innerHTML = html;
-  if (showHeat) renderHeatInfo(byDate);
+  renderPlantToday();
+  renderGarden();
   const isThisMonth = stampYear===today.getFullYear() && stampMonth===today.getMonth();
   const btn = document.getElementById('stamp-press-btn');
   btn.style.display = isThisMonth ? 'block' : 'none';
@@ -1803,7 +1946,8 @@ function updateStampHomeSub() {
   const stamps = loadStamps(), now = new Date();
   const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const count = Object.keys(stamps).filter(d => d.startsWith(prefix)).length;
-  el.textContent = `今月 ${count}個${stamps[toDateStr(now)]!=null ? '　今日は押し済み✓' : '　今日はまだ'}`;
+  const ds = toDateStr(now), st = plantStage(studyByDate()[ds]?.total || 0);
+  el.textContent = `今月 ${count}個${stamps[ds]!=null ? '　今日は押し済み✓' : '　今日はまだ'}　🌱${plantForDate(ds).name}（${PLANT_STAGES[st].name}）`;
 }
 
 /* ── Study Timer ── */
@@ -1856,6 +2000,7 @@ function persistStudyLog(log) {
   localStorage.setItem(STUDY_LOG_KEY, JSON.stringify(log));
   if (db && currentUser) db.collection('users').doc(currentUser.uid).set({ studyLog: log }, { merge: true }).catch(()=>{});
   updatePublicStudy();
+  updateStampHomeSub(); // ホームの「今日の植物」の育ち具合を更新
 }
 
 function goTimer() {
@@ -3007,6 +3152,7 @@ renderHome();
 loadBgImage();
 updateStampHomeSub();
 updateTimerHomeSub();
+showPlantPop();
 </script>
 </body>
 </html>
