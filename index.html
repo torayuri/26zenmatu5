@@ -187,6 +187,12 @@
     .doc-content ul,.doc-content ol{margin:.4em 0 .7em 1.5em;} .doc-content li{margin-bottom:.25em;}
     .doc-content table{border-collapse:collapse;width:100%;margin:.5em 0;overflow-x:auto;display:block;}
     .doc-content td,.doc-content th{border:1px solid var(--border);padding:6px 10px;min-width:60px;}
+    .doc-content img{max-width:100% !important;height:auto !important;object-fit:contain;vertical-align:middle;}
+    .doc-content.editing{outline:2px dashed var(--p1);outline-offset:-2px;-webkit-touch-callout:default;caret-color:var(--p1);}
+    .doc-content.editing .red-hidden{-webkit-user-select:text;user-select:text;}
+    .doc-edit-btn{margin-left:auto;margin-right:50px;padding:7px 14px;border:none;border-radius:10px;background:var(--badge-bg);color:var(--badge-fg);font-size:14px;font-weight:bold;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
+    .doc-edit-btn.on{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;}
+    .blank-doc-btn{width:100%;margin-top:10px;padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--title);font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 
     /* ── global back ── */
     .g-back{position:fixed;bottom:24px;left:20px;width:46px;height:46px;border-radius:50%;border:none;background:var(--card-bg);color:var(--title);font-size:20px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:100;display:none;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:opacity .15s;}
@@ -626,10 +632,10 @@
   </div>
   <div class="upload-area" id="doc-upload-area">
     <div class="ul-icon">📄</div>
-    <div class="ul-title">Wordファイルをアップロード</div>
+    <div class="ul-title">Word・テキストファイルをアップロード</div>
     <div class="ul-sub">タップ、またはドラッグ＆ドロップ</div>
     <button class="ul-pick" onclick="document.getElementById('doc-file-input').click()">ファイルを選択</button>
-    <input type="file" id="doc-file-input" accept=".docx" style="display:none">
+    <input type="file" id="doc-file-input" accept=".docx,.txt,text/plain" style="display:none">
     <div class="ul-count" id="doc-ul-count" style="display:none"></div>
   </div>
   <div style="width:100%;margin-bottom:4px">
@@ -637,7 +643,8 @@
     <input type="text" class="f-input" id="doc-name" placeholder="資料名を入力してください">
   </div>
   <button class="save-btn" id="doc-save-btn" disabled onclick="saveDoc()">保存して開く</button>
-  <div class="hint-box"><strong>対応ファイル</strong>Word文書（.docx）テキスト・見出し・リストなどを表示できます</div>
+  <button class="blank-doc-btn" onclick="createBlankDoc()">✏️ ファイルなしで白紙から書く</button>
+  <div class="hint-box"><strong>対応ファイル</strong>Word文書（.docx）：テキスト・見出し・リスト・画像などを表示できます<br>テキストファイル（.txt）：そのままの文章を表示できます</div>
 </div>
 
 <!-- ⑦ Doc Detail -->
@@ -655,6 +662,7 @@
   <div class="s-header" style="position:sticky;top:0;background:var(--bg);z-index:10;padding-bottom:8px;">
     <button class="back-btn" onclick="goDocDetail(currentDocId)">←</button>
     <span class="s-title" id="doc-view-title"></span>
+    <button class="doc-edit-btn" id="doc-edit-btn" onclick="toggleDocEdit()">✏️ 編集</button>
   </div>
   <div class="doc-content" id="doc-content"></div>
 </div>
@@ -1058,6 +1066,7 @@ let idx = 0, round = 1, flipped = false, pendingWords = null;
 
 /* ── Navigation ── */
 function showScreen(id) {
+  if (docEditing && id !== 'doc-view-screen') setDocEditing(false);
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
@@ -2116,26 +2125,64 @@ dua.addEventListener('dragover', e => { e.preventDefault(); dua.classList.add('d
 dua.addEventListener('dragleave', () => dua.classList.remove('dragover'));
 dua.addEventListener('drop', e => { e.preventDefault(); dua.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadDocFile(e.dataTransfer.files[0]); });
 
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// テキスト → HTML（空行で段落、改行は<br>）
+function textToHtml(text) {
+  const blocks = text.replace(/\r\n?/g, '\n').split(/\n{2,}/);
+  return blocks.map(b => b.trim() ? '<p>' + escapeHtml(b).replace(/\n/g, '<br>') + '</p>' : '').join('');
+}
+// UTF-8で読めなければShift_JIS（Windowsのメモ帳など）として読む
+function decodeText(buf) {
+  let bytes = new Uint8Array(buf);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch {}
+  try { return new TextDecoder('shift_jis').decode(bytes); } catch {}
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function onDocLoaded(html, file) {
+  pendingDocHtml = html;
+  const ni = document.getElementById('doc-name');
+  if (!ni.value) ni.value = file.name.replace(/\.[^.]+$/, '');
+  const uc = document.getElementById('doc-ul-count');
+  uc.textContent = '読み込み完了';
+  document.getElementById('doc-save-btn').disabled = false;
+}
+
 function loadDocFile(file) {
-  if (!file.name.toLowerCase().endsWith('.docx')) { alert('.docxファイルを選択してください'); return; }
+  const lower = file.name.toLowerCase();
+  const isTxt = lower.endsWith('.txt') || file.type === 'text/plain';
+  if (!lower.endsWith('.docx') && !isTxt) { alert('.docx または .txt ファイルを選択してください'); return; }
   const uc = document.getElementById('doc-ul-count');
   uc.textContent = '読み込み中...'; uc.style.display = 'inline-block';
+  if (isTxt) {
+    const r = new FileReader();
+    r.onload = e => {
+      const text = decodeText(e.target.result);
+      if (!text.trim()) { alert('内容が空でした'); uc.style.display='none'; return; }
+      onDocLoaded(textToHtml(text), file);
+    };
+    r.onerror = () => { alert('ファイルの読み込みに失敗しました'); uc.style.display='none'; };
+    r.readAsArrayBuffer(file);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = async e => {
     try {
       const result = await mammoth.convertToHtml({ arrayBuffer: e.target.result });
       if (!result.value) { alert('内容が読み込めませんでした'); uc.style.display='none'; return; }
-      pendingDocHtml = result.value;
-      const ni = document.getElementById('doc-name');
-      if (!ni.value) ni.value = file.name.replace(/\.[^.]+$/, '');
-      uc.textContent = '読み込み完了';
-      document.getElementById('doc-save-btn').disabled = false;
+      onDocLoaded(result.value, file);
     } catch { alert('ファイルの読み込みに失敗しました'); uc.style.display='none'; }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function saveDoc() {
+function createBlankDoc() {
+  pendingDocHtml = '<p><br></p>';
+  if (!document.getElementById('doc-name').value.trim()) document.getElementById('doc-name').value = '新しい資料';
+  saveDoc(true);
+}
+function saveDoc(startEditing) {
   if (!pendingDocHtml) return;
   const name = document.getElementById('doc-name').value.trim() || '名前なし資料';
   const doc = {
@@ -2146,7 +2193,8 @@ function saveDoc() {
   };
   const all = loadDecks(); all.push(doc); saveDecks(all);
   currentDocId = doc.id; pendingDocHtml = null;
-  goDocDetail(doc.id);
+  if (startEditing === true) { goDocDetail(doc.id); openDoc(doc.id); toggleDocEdit(true); }
+  else goDocDetail(doc.id);
 }
 
 /* ── Doc Detail ── */
@@ -2184,6 +2232,7 @@ function delDoc() {
 
 /* ── Doc View ── */
 function openDoc(id) {
+  setDocEditing(false);
   currentDocId = id;
   const doc = loadDecks().find(d => d.id === id);
   if (!doc) return;
@@ -2241,11 +2290,45 @@ function closeFmt() {
   document.getElementById('fmt-panel').classList.remove('open');
 }
 
+/* ── 編集モード ── */
+var docEditing = false, docEditTimer = null;
+function setDocEditing(on) {
+  const el = document.getElementById('doc-content');
+  const btn = document.getElementById('doc-edit-btn');
+  if (docEditing && !on) { clearTimeout(docEditTimer); saveDocContent(); }
+  docEditing = on;
+  el.contentEditable = on ? 'true' : 'false';
+  el.classList.toggle('editing', on);
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '✓ 完了' : '✏️ 編集';
+  hideSelToolbar(); savedRange = null;
+  if (typeof CSS !== 'undefined' && CSS.highlights) CSS.highlights.delete('sel-hl');
+}
+function toggleDocEdit(force) {
+  const on = typeof force === 'boolean' ? force : !docEditing;
+  setDocEditing(on);
+  if (on) document.getElementById('doc-content').focus();
+}
+document.getElementById('doc-content').addEventListener('input', () => {
+  if (!docEditing) return;
+  clearTimeout(docEditTimer);
+  docEditTimer = setTimeout(saveDocContent, 800);
+});
+// 貼り付けは書式なしの文字だけにする（変なレイアウト崩れ防止）
+document.getElementById('doc-content').addEventListener('paste', e => {
+  if (!docEditing) return;
+  const text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (text == null) return;
+  e.preventDefault();
+  document.execCommand('insertText', false, text);
+});
+
 /* ── Selection toolbar ── */
 let savedRange = null;
 let selTimer = null;
 
 function finalizeSelection() {
+  if (docEditing) return;
   const sel = window.getSelection();
   const container = document.getElementById('doc-content');
   if (!sel || sel.isCollapsed || !sel.rangeCount) return;
@@ -2262,6 +2345,7 @@ function finalizeSelection() {
 
 // リアルタイムでCSS ハイライトを更新。ハンドル調整後600ms で確定
 document.addEventListener('selectionchange', () => {
+  if (docEditing) return;
   if (!document.getElementById('doc-view-screen').classList.contains('active')) return;
   const sel = window.getSelection();
   const container = document.getElementById('doc-content');
@@ -2294,6 +2378,7 @@ document.addEventListener('pointerdown', e => {
 // Red-hidden toggle + long-press delete
 let _lpTimer = null, _lpFired = false;
 document.getElementById('doc-content').addEventListener('touchstart', e => {
+  if (docEditing) return;
   const t = e.target.closest('.red-hidden');
   if (!t) return;
   _lpFired = false;
@@ -2306,6 +2391,7 @@ document.getElementById('doc-content').addEventListener('touchend',  () => { if 
 document.getElementById('doc-content').addEventListener('touchmove', () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
 
 document.getElementById('doc-content').addEventListener('click', e => {
+  if (docEditing) return;
   const sel = window.getSelection();
   if (sel && !sel.isCollapsed) return;
   if (_lpFired) { _lpFired = false; return; }
@@ -2314,6 +2400,7 @@ document.getElementById('doc-content').addEventListener('click', e => {
 });
 
 document.getElementById('doc-content').addEventListener('contextmenu', e => {
+  if (docEditing) return;
   e.preventDefault();
   const t = e.target.closest('.red-hidden');
   if (t) deleteRedHidden(t);
