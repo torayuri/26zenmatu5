@@ -1678,18 +1678,21 @@ function nextMonth() { if (++stampMonth > 11) { stampMonth=0; stampYear++; } ren
 /* ── 植物を育てる ── */
 // 毎日ちがう植物。勉強時間で 種→芽→若葉→つぼみ→満開 と育つ
 const PLANTS = [
-  { name: 'ひまわり',     type: 'flower', petal: '#facc15', center: '#78350f', n: 14, pw: .28 },
+  // type: flower=花びらが放射状 / tulip / tree / cactus / spike=穂 / cluster=小花のかたまり
+  { name: 'ひまわり',     type: 'flower', petal: '#fbbf24', center: '#5b3413', n: 20, pw: .24, pl: 1, seeds: true, big: 1.15 },
   { name: 'チューリップ', type: 'tulip',  petal: '#ef4444' },
   { name: 'さくら',       type: 'tree',   petal: '#f9a8d4' },
   { name: 'サボテン',     type: 'cactus', petal: '#f472b6' },
-  { name: 'コスモス',     type: 'flower', petal: '#f472b6', center: '#facc15', n: 8, pw: .38 },
+  { name: 'コスモス',     type: 'flower', petal: '#f9a8d4', center: '#eab308', n: 8, pw: .42, pl: 1, notch: true },
   { name: 'ラベンダー',   type: 'spike',  petal: '#a78bfa' },
-  { name: 'あさがお',     type: 'flower', petal: '#60a5fa', center: '#ffffff', n: 5, pw: .62 },
-  { name: 'たんぽぽ',     type: 'flower', petal: '#fde047', center: '#eab308', n: 22, pw: .16 },
-  { name: 'バラ',         type: 'flower', petal: '#e11d48', center: '#9f1239', n: 9, pw: .5, inner: true },
-  { name: 'もみじ',       type: 'tree',   petal: '#f97316' },
-  { name: 'マーガレット', type: 'flower', petal: '#ffffff', center: '#facc15', n: 12, pw: .3 },
+  { name: 'あさがお',     type: 'flower', petal: '#3b82f6', center: '#f8fafc', n: 5, pw: .78, pl: .9, base: '#e0e7ff' },
+  { name: 'たんぽぽ',     type: 'flower', petal: '#fde047', center: '#facc15', n: 24, pw: .14, pl: .95, layers: 2 },
+  { name: 'バラ',         type: 'flower', petal: '#e11d48', center: '#9f1239', n: 6, pw: .6, pl: .8, layers: 3 },
+  { name: 'もみじ',       type: 'tree',   petal: '#ea580c', fall: true },
+  { name: 'マーガレット', type: 'flower', petal: '#ffffff', center: '#facc15', n: 14, pw: .24, pl: 1 },
   { name: 'きいろチューリップ', type: 'tulip', petal: '#facc15' },
+  { name: 'あじさい',     type: 'cluster', petal: '#818cf8', petal2: '#c084fc' },
+  { name: 'ハイビスカス', type: 'flower', petal: '#dc2626', center: '#7f1d1d', n: 5, pw: .72, pl: 1.05, stamen: '#fde047', big: 1.1 },
 ];
 const PLANT_STAGES = [
   { name: '種',     min: 0  },
@@ -1702,7 +1705,7 @@ const PLANT_CYCLE_MIN = 120; // 2時間で満開。超えたら新しい芽が�
 function plantForDate(ds) {
   const [y, m, d] = ds.split('-').map(Number);
   const day = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
-  return PLANTS[((day * 5) % PLANTS.length + PLANTS.length) % PLANTS.length]; // 12日で全種類が一巡、前の日と必ず違う
+  return PLANTS[((day * 5) % PLANTS.length + PLANTS.length) % PLANTS.length]; // 14日で全種類が一巡、前の日と必ず違う
 }
 function plantStage(sec) {
   const min = sec / 60;
@@ -1730,86 +1733,193 @@ function studyByDate() {
   return map;
 }
 
-// 植物の絵（SVG）
-function plantGroup(pl, st) {
-  const G = '#22c55e', GD = '#15803d', K = '#78350f';
+// 植物の絵（SVG）。グラデーションと葉脈で少し立体的に
+let _plantUid = 0;
+function shade(hex, amt) { // amt>0 で白に、<0 で黒に近づける
+  const n = parseInt(hex.slice(1), 16);
+  const t = amt < 0 ? 0 : 255, p = Math.abs(amt);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v + (t - v) * p));
+  return '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1);
+}
+function plantDefs(pl, u) {
+  const P = pl.petal, C = pl.center || '#facc15';
+  const lin = (id, stops, x2 = 0, y1 = 1) => `<linearGradient id="${id}${u}" x1="0" y1="${y1}" x2="${x2}" y2="0">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`;
+  const rad = (id, a, b, cx = .4, cy = .35) => `<radialGradient id="${id}${u}" cx="${cx}" cy="${cy}" r=".75"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
+  const hor = (id, stops) => `<linearGradient id="${id}${u}" x1="0" y1="0" x2="1" y2="0">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`;
+  return `<defs>
+${lin('pt', [[0, pl.base || shade(P, -.3)], [.55, P], [1, shade(P, .22)]])}
+${lin('bd', [[0, shade(P, -.4)], [1, shade(P, .15)]])}
+${lin('lf', [[0, '#2f7d32'], [1, '#74c870']], 1, 1)}
+${rad('ct', shade(C, .3), shade(C, -.35))}
+${rad('cn', '#86d67f', '#2e7d32')}
+${rad('cf', shade(P, .25), shade(P, -.35))}
+${hor('cc', [[0, '#2a6e2d'], [.45, '#73c96e'], [1, '#245f27']])}
+${hor('bk', [[0, '#4a2f17'], [.5, '#8b5a2b'], [1, '#3d2612']])}
+${hor('pot', [[0, '#8a3f18'], [.3, '#d98a52'], [.65, '#c06a35'], [1, '#7c3713']])}
+${lin('rim', [[0, '#b8612e'], [1, '#eaa36d']])}
+${rad('soil', '#6b4226', '#3a2312', .5, .4)}
+${rad('sd', '#c08a4a', '#6b4320')}
+</defs>`;
+}
+
+function plantGroup(pl, st, u) {
+  const P = pl.petal;
   let g = '';
-  const leaf = (x, y, rot, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${7*s}" ry="${3.2*s}" fill="${G}" transform="rotate(${rot} ${x} ${y})"/>`;
-  const stem = (h) => `<path d="M50 90 Q${50 + h * .06} ${90 - h / 2} 50 ${90 - h}" stroke="${GD}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
-  const petals = (cx, cy, r, n, pw, col) => {
-    let p = '';
-    for (let i = 0; i < n; i++) {
-      const a = 360 / n * i;
-      p += `<ellipse cx="${cx}" cy="${cy - r * .62}" rx="${r * pw}" ry="${r * .5}" fill="${col}" stroke="rgba(0,0,0,.08)" transform="rotate(${a} ${cx} ${cy})"/>`;
+  const leaf = (x, y, rot, s = 1) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})"><path d="M0 0 C3 -4.2 9 -4.8 13.5 0 C9 4.8 3 4.2 0 0Z" fill="url(#lf${u})"/><path d="M.6 0 Q7 -.6 12.5 0" stroke="#b5e8ad" stroke-width=".45" fill="none" opacity=".85"/></g>`;
+  const stem = (h, w = 2.6) => `<path d="M50 90 Q${50 + h * .07} ${90 - h / 2} 50 ${90 - h}" stroke="#2f6f31" stroke-width="${w}" fill="none" stroke-linecap="round"/><path d="M49.4 89 Q${49.4 + h * .07} ${90 - h / 2} 49.4 ${91 - h}" stroke="#6fbf6a" stroke-width=".7" fill="none" opacity=".7"/>`;
+  const petalPath = (L, W, notch) => notch
+    ? `M0 0 C${W} ${-L * .3} ${W} ${-L * .88} ${W * .4} ${-L} L0 ${-L * .9} L${-W * .4} ${-L} C${-W} ${-L * .88} ${-W} ${-L * .3} 0 0Z`
+    : `M0 0 C${W} ${-L * .25} ${W * .95} ${-L * .82} 0 ${-L} C${-W * .95} ${-L * .82} ${-W} ${-L * .25} 0 0Z`;
+  const bloom = (cx, cy, R) => {
+    let b = '';
+    const n = pl.n, layers = pl.layers || 1;
+    // 奥にもう一列、少し暗い花びら（立体感）
+    if (n >= 8 && layers === 1) {
+      for (let i = 0; i < n; i++) b += `<path d="${petalPath(R * pl.pl * .92, R * pl.pw)}" fill="${shade(P, -.18)}" transform="translate(${cx} ${cy}) rotate(${360 / n * (i + .5)})"/>`;
     }
-    return p;
+    for (let k = 0; k < layers; k++) {
+      const f = 1 - k * .3, off = k * (180 / n);
+      for (let i = 0; i < n; i++) {
+        const L = R * pl.pl * f, W = R * pl.pw * f;
+        b += `<path d="${petalPath(L, W, pl.notch)}" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".25" transform="translate(${cx} ${cy}) rotate(${360 / n * i + off})"/>`;
+        if (n <= 8 && k === 0) b += `<path d="M0 -1 L0 ${-L * .75}" stroke="${shade(P, .45)}" stroke-width=".4" opacity=".55" transform="translate(${cx} ${cy}) rotate(${360 / n * i})"/>`;
+      }
+    }
+    const cr = R * (pl.seeds ? .42 : layers >= 3 ? .16 : .26);
+    b += `<circle cx="${cx}" cy="${cy}" r="${cr}" fill="url(#ct${u})"/>`;
+    if (pl.seeds) for (let i = 1; i < 70; i++) {
+      const rr = cr * .92 * Math.sqrt(i / 70), a = i * 2.39996;
+      b += `<circle cx="${(cx + rr * Math.cos(a)).toFixed(2)}" cy="${(cy + rr * Math.sin(a)).toFixed(2)}" r=".5" fill="${i % 2 ? '#2b1608' : '#7a4a1c'}"/>`;
+    }
+    if (layers >= 3) b += `<path d="M${cx - 1.5} ${cy} a1.6 1.6 0 1 1 3 0" stroke="${shade(P, -.5)}" stroke-width=".5" fill="none"/>`;
+    if (pl.stamen) {
+      b += `<path d="M${cx} ${cy} q${R * .25} ${-R * .3} ${R * .55} ${-R * .75}" stroke="${shade(pl.stamen, -.2)}" stroke-width="1" fill="none"/>`;
+      for (let i = 0; i < 5; i++) b += `<circle cx="${cx + R * .55 + Math.cos(i) * 1.6}" cy="${cy - R * .75 + Math.sin(i * 2) * 1.4}" r=".9" fill="${pl.stamen}"/>`;
+    }
+    return b;
   };
-  if (st === 0) {
-    g += `<ellipse cx="50" cy="88" rx="5" ry="3.5" fill="#a16207"/><path d="M48 86 q2 -3 4 0" stroke="#713f12" stroke-width="1" fill="none"/>`;
-  } else if (pl.type === 'tree') {
-    const h = [0, 14, 26, 42, 46][st];
-    g += `<rect x="47" y="${90 - h}" width="6" height="${h}" rx="2" fill="#92400e"/>`;
-    if (st === 1) g += leaf(55, 90 - h, -20) + leaf(45, 90 - h, 20);
-    else {
-      const r = [0, 0, 14, 22, 25][st], cy = 90 - h - r * .4;
-      g += `<circle cx="50" cy="${cy}" r="${r}" fill="${G}"/><circle cx="${50 - r * .6}" cy="${cy + r * .3}" r="${r * .6}" fill="${G}"/><circle cx="${50 + r * .6}" cy="${cy + r * .3}" r="${r * .6}" fill="${G}"/>`;
-      if (st >= 3) {
-        const pts = [[-12,-8],[8,-14],[14,4],[-4,6],[-16,8],[2,-4],[16,-6],[-8,-16],[10,12],[-14,-2]];
-        pts.slice(0, st === 3 ? 4 : 10).forEach(([dx, dy]) =>
-          g += `<circle cx="${50 + dx}" cy="${cy + dy}" r="${st === 3 ? 2.2 : 3.6}" fill="${pl.petal}"/>`);
-      }
+
+  if (st === 0) { // 種
+    return `<ellipse cx="50" cy="88.5" rx="4.6" ry="3" fill="url(#sd${u})"/><path d="M47.5 88 q2.5 -1.6 5 0" stroke="#4a2c12" stroke-width=".5" fill="none"/>`;
+  }
+
+  if (pl.type === 'tree') {
+    const h = [0, 14, 28, 42, 46][st];
+    if (st === 1) return stem(h, 2) + leaf(50, 90 - h, -35, .8) + leaf(50, 90 - h, -145, .8);
+    g += `<path d="M46.5 90 C47.5 ${90 - h * .5} 48 ${90 - h * .8} 48.6 ${90 - h} L51.4 ${90 - h} C52 ${90 - h * .8} 52.5 ${90 - h * .5} 53.5 90Z" fill="url(#bk${u})"/>`;
+    if (pl.old) g += `<path d="M49 ${90 - h * .3} q-6 -6 -9 -14" stroke="#4a2f17" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+    g += `<path d="M50 ${90 - h * .55} q6 -5 9 -12 M50 ${90 - h * .7} q-6 -4 -9 -10" stroke="#5b3a1e" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+    const r = [0, 0, 13, 20, 23][st], cy = 90 - h - r * .35;
+    const colored = st === 4; // 満開（花・紅葉）のときは樹冠そのものに色をつける
+    const back = colored ? shade(P, -.3) : '#2e6f31', front = colored ? `url(#cf${u})` : `url(#cn${u})`;
+    const blobs = [[-r * .62, r * .25, r * .62], [r * .62, r * .25, r * .62], [0, -r * .2, r * .8], [-r * .35, -r * .45, r * .5], [r * .38, -r * .42, r * .5]];
+    blobs.forEach(([dx, dy, rr]) => g += `<circle cx="${50 + dx}" cy="${cy + dy + 1.5}" r="${rr}" fill="${back}"/>`);
+    blobs.forEach(([dx, dy, rr]) => g += `<circle cx="${50 + dx - .8}" cy="${cy + dy - .6}" r="${rr * .9}" fill="${front}"/>`);
+    // 小さな花・葉を散らす
+    const pts = [[-12, -6], [8, -13], [14, 3], [-3, 6], [-16, 7], [2, -4], [16, -7], [-8, -15], [9, 10], [-13, -1], [4, -18], [-4, 13], [12, -1], [-18, -6]];
+    if (st >= 3) pts.slice(0, st === 3 ? 5 : 14).forEach(([dx, dy], i) => {
+      const x = 50 + dx * r / 23, y = cy + dy * r / 23;
+      if (st === 3) g += `<circle cx="${x}" cy="${y}" r="1.6" fill="${P}"/>`;
+      else if (pl.fall) g += `<circle cx="${x}" cy="${y}" r="1.4" fill="${shade(P, i % 2 ? .35 : -.2)}"/>`;
+      else { for (let k = 0; k < 5; k++) g += `<ellipse cx="${x}" cy="${y - 1.3}" rx=".9" ry="1.4" fill="${shade(P, .3)}" transform="rotate(${k * 72} ${x} ${y})"/>`; g += `<circle cx="${x}" cy="${y}" r=".5" fill="#e11d48"/>`; }
+    });
+    return g;
+  }
+
+  if (pl.type === 'cactus') {
+    const h = [0, 10, 22, 36, 38][st], top = 90 - h;
+    if (st >= 3) {
+      g += `<path d="M43 ${76 - h / 3} h-5 a4 4 0 0 1 -4 -4 v-9" stroke="#2a6e2d" stroke-width="7.5" fill="none" stroke-linecap="round"/><path d="M43 ${76 - h / 3} h-5 a4 4 0 0 1 -4 -4 v-9" stroke="#5fb85a" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>`;
+      g += `<path d="M57 ${82 - h / 3} h5 a4 4 0 0 0 4 -4 v-11" stroke="#2a6e2d" stroke-width="7.5" fill="none" stroke-linecap="round"/><path d="M57 ${82 - h / 3} h5 a4 4 0 0 0 4 -4 v-11" stroke="#5fb85a" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>`;
     }
-  } else if (pl.type === 'cactus') {
-    const h = [0, 10, 22, 36, 38][st];
-    g += `<rect x="42" y="${90 - h}" width="16" height="${h + 2}" rx="8" fill="${G}"/>`;
-    if (st >= 3) g += `<path d="M42 ${76 - h / 3} h-6 a4 4 0 0 1 -4 -4 v-8" stroke="${G}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M58 ${82 - h / 3} h6 a4 4 0 0 0 4 -4 v-10" stroke="${G}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
-    g += `<path d="M50 ${92 - h} v${h - 4}" stroke="${GD}" stroke-width="1" opacity=".5"/>`;
-    if (st === 3) g += `<ellipse cx="50" cy="${88 - h}" rx="3" ry="4" fill="${pl.petal}"/>`;
-    if (st === 4) g += petals(50, 86 - h, 10, 8, .3, pl.petal) + `<circle cx="50" cy="${86 - h}" r="3" fill="#fde047"/>`;
+    g += `<rect x="42" y="${top}" width="16" height="${h + 2}" rx="8" fill="url(#cc${u})"/>`;
+    [46, 50, 54].forEach(x => g += `<path d="M${x} ${top + 4} V${88}" stroke="#2a6e2d" stroke-width=".6" opacity=".6"/>`);
+    for (let y = top + 5; y < 86; y += 5) [44, 48, 52, 56].forEach(x => g += `<path d="M${x} ${y} l-1.2 -1 M${x} ${y} l1.2 -1" stroke="#f1f5f9" stroke-width=".35"/>`);
+    if (st === 3) g += `<path d="M0 0 C2.5 -2 2.5 -6 0 -8 C-2.5 -6 -2.5 -2 0 0Z" fill="url(#bd${u})" transform="translate(50 ${top + 1})"/>`;
+    if (st === 4) {
+      for (let i = 0; i < 10; i++) g += `<path d="${petalPath(8, 2.4)}" fill="url(#pt${u})" transform="translate(50 ${top - 1}) rotate(${i * 36 - 90}) scale(1 ${i % 2 ? .85 : 1})"/>`;
+      g += `<circle cx="50" cy="${top - 1}" r="2.2" fill="#fde047"/>`;
+    }
+    return g;
+  }
+
+  // 茎のある植物
+  const h = [0, 14, 30, 48, 52][st], top = 90 - h;
+  if (pl.type === 'tulip') {
+    g += stem(h, 2.8);
+    if (st >= 2) g += leaf(50, 89, -62, st >= 3 ? 2.1 : 1.5) + leaf(50, 89, -118, st >= 3 ? 1.9 : 1.4);
+    else g += leaf(50, top + 1, -50, .7) + leaf(50, top + 1, -130, .7);
   } else {
-    const h = [0, 14, 30, 48, 52][st], top = 90 - h;
     g += stem(h);
-    if (st === 1) g += leaf(55, top + 2, -25, .8) + leaf(45, top + 2, 25, .8);
-    if (st >= 2) g += leaf(57, 80, -20) + leaf(43, 74, 20) + (st >= 3 ? leaf(57, 64, -30, .9) + leaf(43, 58, 30, .9) : '');
-    if (pl.type === 'spike') {
-      if (st >= 3) {
-        [[-9, 6, -12], [0, 0, 0], [9, 6, 12]].forEach(([dx, dy, rot]) => {
-          for (let i = 0; i < 6; i++) g += `<ellipse cx="${50 + dx + i * rot / 12}" cy="${top + dy - i * 4.5}" rx="3" ry="2.6" fill="${st === 4 ? pl.petal : '#86efac'}"/>`;
-        });
-      }
-    } else if (st === 3) {
-      g += `<ellipse cx="50" cy="${top - 5}" rx="5.5" ry="8" fill="${pl.petal}" stroke="rgba(0,0,0,.1)"/><path d="M44 ${top - 1} q6 6 12 0" fill="${G}"/>`;
-    } else if (st === 4) {
-      if (pl.type === 'tulip') {
-        g += `<path d="M38 ${top - 16} q2 18 12 18 q10 0 12 -18 l-6 6 l-6 -10 l-6 10 z" fill="${pl.petal}" stroke="rgba(0,0,0,.12)"/>`;
-      } else {
-        const r = 18;
-        g += petals(50, top - 6, r, pl.n, pl.pw, pl.petal);
-        if (pl.inner) g += petals(50, top - 6, r * .6, 6, .55, pl.center);
-        g += `<circle cx="50" cy="${top - 6}" r="${r * (pl.inner ? .22 : .36)}" fill="${pl.center}"/>`;
-      }
+    if (st === 1) g += leaf(50, top + 1, -30, .7) + leaf(50, top + 1, -150, .7);
+    if (st >= 2) {
+      const s = pl.type === 'cluster' ? 1.35 : 1;
+      g += leaf(50.6, 81, -25, s) + leaf(49.4, 74, -155, s);
+      if (st >= 3) g += leaf(50.8, 64, -35, .85 * s) + leaf(49.2, 57, -145, .85 * s);
     }
   }
-  return g;
+  if (st < 3) return g;
+
+  if (pl.type === 'spike') {
+    [[-8, 7, -14], [0, 0, 0], [8, 7, 14]].forEach(([dx, dy, rot]) => {
+      const bx = 50 + dx * .4, by = top + 10;
+      g += `<path d="M${bx} ${by} L${50 + dx + rot * .3} ${top + dy - 22}" stroke="#4d8c4a" stroke-width="1" />`;
+      for (let i = 0; i < 9; i++) {
+        const t = i / 8, x = 50 + dx + rot * .3 * t + (i % 2 ? 1.2 : -1.2), y = top + dy - t * 22;
+        g += `<ellipse cx="${x}" cy="${y}" rx="${st === 4 ? 1.9 : 1.4}" ry="${st === 4 ? 1.6 : 1.2}" fill="${st === 4 ? `url(#pt${u})` : '#a7d8a0'}"/>`;
+      }
+    });
+    return g;
+  }
+  if (pl.type === 'cluster') { // あじさい
+    const cx = 50, cy = top - 8, R = st === 4 ? 15 : 9;
+    g += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${st === 4 ? shade(P, -.35) : '#5c9e57'}"/>`;
+    const cnt = st === 4 ? 46 : 18;
+    for (let i = 1; i <= cnt; i++) {
+      const rr = R * .88 * Math.sqrt(i / cnt), a = i * 2.39996, x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
+      if (st === 3) { g += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.3" fill="${i % 3 ? '#b7e4a8' : '#d9f2c9'}"/>`; continue; }
+      const col = [P, pl.petal2, shade(P, .25), shade(pl.petal2, -.1)][i % 4];
+      for (let k = 0; k < 4; k++) g += `<ellipse cx="${x.toFixed(2)}" cy="${(y - 1.3).toFixed(2)}" rx="1.1" ry="1.5" fill="${col}" transform="rotate(${k * 90 + i * 17} ${x.toFixed(2)} ${y.toFixed(2)})"/>`;
+      g += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r=".35" fill="#fef9c3"/>`;
+    }
+    return g;
+  }
+  if (st === 3) { // つぼみ
+    g += `<path d="M0 0 C5 -3 5.5 -12 0 -17 C-5.5 -12 -5 -3 0 0Z" fill="url(#bd${u})" transform="translate(50 ${top})"/>`;
+    g += leaf(50, top + 1, -70, .55) + leaf(50, top + 1, -110, .55);
+    return g;
+  }
+  if (pl.type === 'tulip') {
+    const t = top;
+    g += `<path d="M50 ${t + 2} C42 ${t - 2} 40 ${t - 16} 50 ${t - 23} C60 ${t - 16} 58 ${t - 2} 50 ${t + 2}Z" fill="${shade(P, -.3)}"/>`;
+    g += `<path d="M50 ${t + 3} C39 ${t + 1} 36 ${t - 12} 40 ${t - 21} C46 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
+    g += `<path d="M50 ${t + 3} C61 ${t + 1} 64 ${t - 12} 60 ${t - 21} C54 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
+    g += `<path d="M50 ${t + 3} C44 ${t - 2} 44 ${t - 14} 50 ${t - 20} C56 ${t - 14} 56 ${t - 2} 50 ${t + 3}Z" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".3"/>`;
+    g += `<path d="M50 ${t} L50 ${t - 16}" stroke="${shade(P, .5)}" stroke-width=".5" opacity=".5"/>`;
+    return g;
+  }
+  return g + bloom(50, top - 6, 17 * (pl.big || 1));
 }
+
 const PLANT_MAX_DRAW = 4; // 1つの鉢に描く最大本数
 // stages: 鉢に生えている株の段階のリスト（例 [4,4,2] = 満開2本＋若葉1本）
 function plantsSvg(pl, stages) {
-  const list = stages.slice(0, PLANT_MAX_DRAW), n = list.length;
-  if (n <= 1) {
-    return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${plantGroup(pl, list[0] || 0)}
-<ellipse cx="50" cy="90" rx="24" ry="4" fill="#78350f"/>
-<path d="M28 92 h44 l-5 26 h-34 z" fill="#c2703d"/><rect x="25" y="87" width="50" height="8" rx="3" fill="#d9824a"/></svg>`;
-  }
-  // 横長のプランターに並べて植える
+  const u = ++_plantUid, list = stages.slice(0, PLANT_MAX_DRAW), n = Math.max(1, list.length);
+  const wide = n > 1, L = wide ? 6 : 25, R = wide ? 94 : 75, rx = (R - L) / 2;
   const scale = [1, 1, .72, .6, .5][n], gap = [0, 0, 36, 28, 22][n];
-  const g = list.map((st, i) => {
+  const plants = (list.length ? list : [0]).map((st, i) => {
     const dx = (i - (n - 1) / 2) * gap;
-    return `<g transform="translate(${50 + dx} 90) scale(${scale}) translate(-50 -90)">${plantGroup(pl, st)}</g>`;
+    return n === 1 ? plantGroup(pl, st, u) : `<g transform="translate(${50 + dx} 90) scale(${scale}) translate(-50 -90)">${plantGroup(pl, st, u)}</g>`;
   }).join('');
-  return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${g}
-<ellipse cx="50" cy="90" rx="42" ry="4" fill="#78350f"/>
-<path d="M10 92 h80 l-5 24 h-70 z" fill="#c2703d"/><rect x="6" y="87" width="88" height="8" rx="3" fill="#d9824a"/></svg>`;
+  return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${plantDefs(pl, u)}
+<ellipse cx="50" cy="118.3" rx="${rx - 2}" ry="2" fill="rgba(0,0,0,.18)"/>
+<ellipse cx="50" cy="90" rx="${rx}" ry="4.6" fill="url(#rim${u})"/>
+<ellipse cx="50" cy="90.4" rx="${rx - 3}" ry="3.3" fill="url(#soil${u})"/>
+${plants}
+<path d="M${L + 3} 96 H${R - 3} L${R - 7} 118 H${L + 7} Z" fill="url(#pot${u})"/>
+<path d="M${L} 90 A${rx} 4.6 0 0 0 ${R} 90 L${R} 95.5 A${rx} 4.6 0 0 1 ${L} 95.5 Z" fill="url(#rim${u})"/>
+<path d="M${L + 2} 92.5 A${rx - 2} 3.5 0 0 0 ${R - 2} 92.5" stroke="#f4c49a" stroke-width=".6" fill="none" opacity=".7"/>
+<path d="M${L + 9} 99 L${L + 11} 115" stroke="#fff" stroke-width="1.2" opacity=".14" stroke-linecap="round"/></svg>`;
 }
 function plantSvg(pl, st) { return plantsSvg(pl, [st]); }
 // 勉強時間から鉢に生えている株のリストを作る
