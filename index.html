@@ -1678,21 +1678,21 @@ function nextMonth() { if (++stampMonth > 11) { stampMonth=0; stampYear++; } ren
 /* ── 植物を育てる ── */
 // 毎日ちがう植物。勉強時間で 種→芽→若葉→つぼみ→満開 と育つ
 const PLANTS = [
-  // type: flower=花びらが放射状 / tulip / tree / cactus / spike=穂 / cluster=小花のかたまり
-  { name: 'ひまわり',     type: 'flower', petal: '#fbbf24', center: '#5b3413', n: 20, pw: .24, pl: 1, seeds: true, big: 1.15 },
-  { name: 'チューリップ', type: 'tulip',  petal: '#ef4444' },
-  { name: 'さくら',       type: 'tree',   petal: '#f9a8d4' },
-  { name: 'サボテン',     type: 'cactus', petal: '#f472b6' },
-  { name: 'コスモス',     type: 'flower', petal: '#f9a8d4', center: '#eab308', n: 8, pw: .42, pl: 1, notch: true },
-  { name: 'ラベンダー',   type: 'spike',  petal: '#a78bfa' },
-  { name: 'あさがお',     type: 'flower', petal: '#3b82f6', center: '#f8fafc', n: 5, pw: .78, pl: .9, base: '#e0e7ff' },
-  { name: 'たんぽぽ',     type: 'flower', petal: '#fde047', center: '#facc15', n: 24, pw: .14, pl: .95, layers: 2 },
-  { name: 'バラ',         type: 'flower', petal: '#e11d48', center: '#9f1239', n: 6, pw: .6, pl: .8, layers: 3 },
-  { name: 'もみじ',       type: 'tree',   petal: '#ea580c', fall: true },
-  { name: 'マーガレット', type: 'flower', petal: '#ffffff', center: '#facc15', n: 14, pw: .24, pl: 1 },
-  { name: 'きいろチューリップ', type: 'tulip', petal: '#facc15' },
-  { name: 'あじさい',     type: 'cluster', petal: '#818cf8', petal2: '#c084fc' },
-  { name: 'ハイビスカス', type: 'flower', petal: '#dc2626', center: '#7f1d1d', n: 5, pw: .72, pl: 1.05, stamen: '#fde047', big: 1.1 },
+  // kind: 植物ごとの描き方。花びらの設定は flower() で使う
+  { name: 'ひまわり',     kind: 'sunflower', petal: '#fbbf24', center: '#5b3413', n: 22, pw: .22, pl: 1, seeds: true },
+  { name: 'チューリップ', kind: 'tulip',     petal: '#ef4444' },
+  { name: 'さくら',       kind: 'sakura',    petal: '#f9a8d4' },
+  { name: 'サボテン',     kind: 'cactus',    petal: '#f472b6' },
+  { name: 'コスモス',     kind: 'cosmos',    petal: '#f9a8d4', center: '#eab308', n: 8, pw: .42, pl: 1, notch: true },
+  { name: 'ラベンダー',   kind: 'lavender',  petal: '#a78bfa' },
+  { name: 'あさがお',     kind: 'asagao',    petal: '#3b82f6', center: '#f8fafc', n: 5, pw: .78, pl: .9, base: '#e0e7ff' },
+  { name: 'たんぽぽ',     kind: 'tanpopo',   petal: '#fde047', center: '#facc15', n: 24, pw: .14, pl: .95, layers: 2 },
+  { name: 'バラ',         kind: 'rose',      petal: '#e11d48', center: '#9f1239', n: 6, pw: .6, pl: .8, layers: 3 },
+  { name: 'もみじ',       kind: 'momiji',    petal: '#ea580c' },
+  { name: 'マーガレット', kind: 'daisy',     petal: '#ffffff', center: '#facc15', n: 14, pw: .24, pl: 1 },
+  { name: 'きいろチューリップ', kind: 'tulip', petal: '#facc15' },
+  { name: 'あじさい',     kind: 'hydrangea', petal: '#818cf8', petal2: '#c084fc' },
+  { name: 'ハイビスカス', kind: 'hibiscus',  petal: '#dc2626', center: '#7f1d1d', n: 5, pw: .72, pl: 1.05, stamen: '#fde047' },
 ];
 const PLANT_STAGES = [
   { name: '種',     min: 0  },
@@ -1762,143 +1762,311 @@ ${rad('sd', '#c08a4a', '#6b4320')}
 </defs>`;
 }
 
+// 1株ぶんの絵。st: 0=種 1=芽 2=若葉 3=つぼみ 4=満開。地面は y=90、中心は x=50
 function plantGroup(pl, st, u) {
-  const P = pl.petal;
-  let g = '';
-  const leaf = (x, y, rot, s = 1) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})"><path d="M0 0 C3 -4.2 9 -4.8 13.5 0 C9 4.8 3 4.2 0 0Z" fill="url(#lf${u})"/><path d="M.6 0 Q7 -.6 12.5 0" stroke="#b5e8ad" stroke-width=".45" fill="none" opacity=".85"/></g>`;
-  const stem = (h, w = 2.6) => `<path d="M50 90 Q${50 + h * .07} ${90 - h / 2} 50 ${90 - h}" stroke="#2f6f31" stroke-width="${w}" fill="none" stroke-linecap="round"/><path d="M49.4 89 Q${49.4 + h * .07} ${90 - h / 2} 49.4 ${91 - h}" stroke="#6fbf6a" stroke-width=".7" fill="none" opacity=".7"/>`;
+  const P = pl.petal, LF = `url(#lf${u})`, f2 = n => +(+n).toFixed(2);
+  // ── 葉の形（右向き・長さ10が基準） ──
+  const SH = {
+    oval: 'M0 0 C2 -4 7 -4.5 10 0 C7 4.5 2 4 0 0Z',
+    lance: 'M0 0 C3 -2.1 7 -1.9 10 0 C7 1.9 3 2.1 0 0Z',
+    line: 'M0 0 C3 -.9 7 -.8 10 0 C7 .8 3 .9 0 0Z',
+    heart: 'M0 0 C-1.5 -3.5 2 -6 5 -5 C8 -3.8 9.5 -1.2 10.5 0 C9.5 1.2 8 3.8 5 5 C2 6 -1.5 3.5 0 0Z',
+    cot: 'M0 0 C1 -3.2 5.5 -3.6 7.5 0 C5.5 3.6 1 3.2 0 0Z',
+    strap: 'M0 0 C3 -1.6 8 -1.6 10 0 C8 1.6 3 1.6 0 0Z',
+    butterfly: 'M0 0 C2 -.5 3.5 -4.8 6.2 -4.3 C7.8 -4 7 -1.6 5.4 0 C7 1.6 7.8 4 6.2 4.3 C3.5 4.8 2 .5 0 0Z',
+  };
+  const toothed = (w, teeth, depth = .25) => { // ふちがギザギザの葉
+    const up = [], lo = [], N = teeth * 2;
+    for (let i = 1; i < N; i++) {
+      const t = i / N, wd = w * Math.pow(Math.sin(Math.PI * t), .75) * (i % 2 ? 1 : 1 - depth), x = 10 * t + (i % 2 ? .35 : 0);
+      up.push(`${f2(x)} ${f2(-wd)}`); lo.unshift(`${f2(x)} ${f2(wd)}`);
+    }
+    return `M0 0 L${up.join(' L')} L10 0 L${lo.join(' L')}Z`;
+  };
+  const palm = () => { // もみじの手のひら形（7裂）
+    let d = '';
+    for (let i = 0; i <= 14; i++) {
+      const a = (-90 + (i - 7) * 19) * Math.PI / 180, r = i % 2 ? 2 : 5.4 - Math.abs(i - 7) * .25;
+      d += (i ? ' L' : 'M') + f2(Math.cos(a) * r) + ' ' + f2(Math.sin(a) * r);
+    }
+    return d + ' L0 1.5Z';
+  };
+  const leaf = (x, y, rot, len, shape = 'oval', fill = LF, vein = true) =>
+    `<g transform="translate(${f2(x)} ${f2(y)}) rotate(${f2(rot)}) scale(${f2(len / 10)})"><path d="${SH[shape] || shape}" fill="${fill}"/>${vein ? `<path d="M.4 0 Q5 -.3 9.2 0" stroke="#c6efbd" stroke-width="${f2(5 / len)}" fill="none" opacity=".75"/>` : ''}</g>`;
+  const ln = (d, w, col = '#3a7a3a') => `<path d="${d}" stroke="${col}" stroke-width="${w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const stemTo = (x0, y0, x1, y1, w = 2.4, col = '#3a7a3a', bend = .06) =>
+    ln(`M${f2(x0)} ${f2(y0)} Q${f2((x0 + x1) / 2 + (y0 - y1) * bend)} ${f2((y0 + y1) / 2)} ${f2(x1)} ${f2(y1)}`, w, col);
+  const cotyl = (x, y, len = 6, shape = 'cot') => leaf(x, y, -28, len, shape, LF, false) + leaf(x, y, -152, len, shape, LF, false);
+  const seedling = (h = 8, len = 6, shape = 'cot') => stemTo(50, 90, 50, 90 - h, 1.5, '#6aa84f') + cotyl(50, 90 - h, len, shape);
+  const bud = (x, y, s = 1, rot = 0, sepal = '#3f8a3c') =>
+    `<g transform="translate(${f2(x)} ${f2(y)}) rotate(${rot}) scale(${s})"><path d="M0 0 C4 -2.5 4.5 -10 0 -14 C-4.5 -10 -4 -2.5 0 0Z" fill="url(#bd${u})"/><path d="M0 1 C-3.4 -1 -4.2 -5 -2.8 -8.5 C-2 -4 -1 -1 0 1Z M0 1 C3.4 -1 4.2 -5 2.8 -8.5 C2 -4 1 -1 0 1Z" fill="${sepal}"/></g>`;
   const petalPath = (L, W, notch) => notch
-    ? `M0 0 C${W} ${-L * .3} ${W} ${-L * .88} ${W * .4} ${-L} L0 ${-L * .9} L${-W * .4} ${-L} C${-W} ${-L * .88} ${-W} ${-L * .3} 0 0Z`
-    : `M0 0 C${W} ${-L * .25} ${W * .95} ${-L * .82} 0 ${-L} C${-W * .95} ${-L * .82} ${-W} ${-L * .25} 0 0Z`;
-  const bloom = (cx, cy, R) => {
+    ? `M0 0 C${f2(W)} ${f2(-L * .3)} ${f2(W)} ${f2(-L * .88)} ${f2(W * .4)} ${f2(-L)} L0 ${f2(-L * .9)} L${f2(-W * .4)} ${f2(-L)} C${f2(-W)} ${f2(-L * .88)} ${f2(-W)} ${f2(-L * .3)} 0 0Z`
+    : `M0 0 C${f2(W)} ${f2(-L * .25)} ${f2(W * .95)} ${f2(-L * .82)} 0 ${f2(-L)} C${f2(-W * .95)} ${f2(-L * .82)} ${f2(-W)} ${f2(-L * .25)} 0 0Z`;
+  const flower = (cx, cy, R) => { // 正面から見た花
     let b = '';
     const n = pl.n, layers = pl.layers || 1;
-    // 奥にもう一列、少し暗い花びら（立体感）
-    if (n >= 8 && layers === 1) {
-      for (let i = 0; i < n; i++) b += `<path d="${petalPath(R * pl.pl * .92, R * pl.pw)}" fill="${shade(P, -.18)}" transform="translate(${cx} ${cy}) rotate(${360 / n * (i + .5)})"/>`;
-    }
+    if (n >= 8 && layers === 1) for (let i = 0; i < n; i++)
+      b += `<path d="${petalPath(R * pl.pl * .92, R * pl.pw)}" fill="${shade(P, -.18)}" transform="translate(${f2(cx)} ${f2(cy)}) rotate(${f2(360 / n * (i + .5))})"/>`;
     for (let k = 0; k < layers; k++) {
       const f = 1 - k * .3, off = k * (180 / n);
       for (let i = 0; i < n; i++) {
         const L = R * pl.pl * f, W = R * pl.pw * f;
-        b += `<path d="${petalPath(L, W, pl.notch)}" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".25" transform="translate(${cx} ${cy}) rotate(${360 / n * i + off})"/>`;
-        if (n <= 8 && k === 0) b += `<path d="M0 -1 L0 ${-L * .75}" stroke="${shade(P, .45)}" stroke-width=".4" opacity=".55" transform="translate(${cx} ${cy}) rotate(${360 / n * i})"/>`;
+        b += `<path d="${petalPath(L, W, pl.notch)}" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".25" transform="translate(${f2(cx)} ${f2(cy)}) rotate(${f2(360 / n * i + off)})"/>`;
+        if (n <= 8 && k === 0) b += `<path d="M0 -1 L0 ${f2(-L * .75)}" stroke="${shade(P, .45)}" stroke-width=".4" opacity=".55" transform="translate(${f2(cx)} ${f2(cy)}) rotate(${f2(360 / n * i)})"/>`;
       }
     }
     const cr = R * (pl.seeds ? .42 : layers >= 3 ? .16 : .26);
-    b += `<circle cx="${cx}" cy="${cy}" r="${cr}" fill="url(#ct${u})"/>`;
+    b += `<circle cx="${f2(cx)}" cy="${f2(cy)}" r="${f2(cr)}" fill="url(#ct${u})"/>`;
     if (pl.seeds) for (let i = 1; i < 70; i++) {
       const rr = cr * .92 * Math.sqrt(i / 70), a = i * 2.39996;
-      b += `<circle cx="${(cx + rr * Math.cos(a)).toFixed(2)}" cy="${(cy + rr * Math.sin(a)).toFixed(2)}" r=".5" fill="${i % 2 ? '#2b1608' : '#7a4a1c'}"/>`;
+      b += `<circle cx="${f2(cx + rr * Math.cos(a))}" cy="${f2(cy + rr * Math.sin(a))}" r=".5" fill="${i % 2 ? '#2b1608' : '#7a4a1c'}"/>`;
     }
-    if (layers >= 3) b += `<path d="M${cx - 1.5} ${cy} a1.6 1.6 0 1 1 3 0" stroke="${shade(P, -.5)}" stroke-width=".5" fill="none"/>`;
+    if (layers >= 3) b += `<path d="M${f2(cx - 1.5)} ${f2(cy)} a1.6 1.6 0 1 1 3 0" stroke="${shade(P, -.5)}" stroke-width=".5" fill="none"/>`;
     if (pl.stamen) {
-      b += `<path d="M${cx} ${cy} q${R * .25} ${-R * .3} ${R * .55} ${-R * .75}" stroke="${shade(pl.stamen, -.2)}" stroke-width="1" fill="none"/>`;
-      for (let i = 0; i < 5; i++) b += `<circle cx="${cx + R * .55 + Math.cos(i) * 1.6}" cy="${cy - R * .75 + Math.sin(i * 2) * 1.4}" r=".9" fill="${pl.stamen}"/>`;
+      b += `<path d="M${f2(cx)} ${f2(cy)} q${f2(R * .25)} ${f2(-R * .3)} ${f2(R * .55)} ${f2(-R * .75)}" stroke="${shade(pl.stamen, -.2)}" stroke-width="1" fill="none"/>`;
+      for (let i = 0; i < 5; i++) b += `<circle cx="${f2(cx + R * .55 + Math.cos(i) * 1.6)}" cy="${f2(cy - R * .75 + Math.sin(i * 2) * 1.4)}" r=".9" fill="${pl.stamen}"/>`;
     }
     return b;
   };
+  const blossom = (x, y, s, col) => { // 5枚花びらの小さな花（さくら・あじさい用）
+    let b = '';
+    for (let k = 0; k < 5; k++) b += `<ellipse cx="${f2(x)}" cy="${f2(y - s * .55)}" rx="${f2(s * .38)}" ry="${f2(s * .55)}" fill="${col}" transform="rotate(${k * 72} ${f2(x)} ${f2(y)})"/>`;
+    return b + `<circle cx="${f2(x)}" cy="${f2(y)}" r="${f2(s * .18)}" fill="#be185d"/>`;
+  };
+  // 木の枝（再帰で枝分かれ）。tips に枝先の座標をためる
+  const branches = (x, y, len, ang, w, depth, tips, out) => {
+    const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
+    out.push(ln(`M${f2(x)} ${f2(y)} L${f2(x2)} ${f2(y2)}`, f2(w), '#5b3a1e'));
+    if (depth === 0) { tips.push([x2, y2]); return; }
+    branches(x2, y2, len * .72, ang - .5, w * .65, depth - 1, tips, out);
+    branches(x2, y2, len * .72, ang + .45, w * .65, depth - 1, tips, out);
+    if (depth >= 2) tips.push([x2, y2]);
+  };
+  const tree = (h, depth) => {
+    const tips = [], out = [];
+    out.push(`<path d="M47 90 C48 ${f2(90 - h * .5)} 48.6 ${f2(90 - h * .85)} 49 ${f2(90 - h)} L51 ${f2(90 - h)} C51.4 ${f2(90 - h * .85)} 52 ${f2(90 - h * .5)} 53 90Z" fill="url(#bk${u})"/>`);
+    branches(50, 90 - h, h * .42, -Math.PI / 2 - .55, 2.2, depth, tips, out);
+    branches(50, 90 - h, h * .45, -Math.PI / 2 + .5, 2.2, depth, tips, out);
+    branches(50, 90 - h * .8, h * .32, -Math.PI / 2 - 1.05, 1.5, depth - 1, tips, out);
+    return { svg: out.join(''), tips };
+  };
 
-  if (st === 0) { // 種
-    return `<ellipse cx="50" cy="88.5" rx="4.6" ry="3" fill="url(#sd${u})"/><path d="M47.5 88 q2.5 -1.6 5 0" stroke="#4a2c12" stroke-width=".5" fill="none"/>`;
+  let g = '';
+  // ── 種（チューリップは球根） ──
+  if (st === 0) {
+    if (pl.kind === 'tulip') return `<path d="M50 80 C53 83 57 86 56 89.5 L44 89.5 C43 86 47 83 50 80Z" fill="#c8a27a"/><path d="M50 80 C51 84 52 87 51.5 89.5 M50 80 C48.5 84 47.5 87 48 89.5" stroke="#8a6440" stroke-width=".5" fill="none"/>`;
+    if (pl.kind === 'sunflower') return `<g transform="rotate(-20 50 88)"><ellipse cx="50" cy="88" rx="2.4" ry="4.4" fill="#2b2b2b"/><path d="M50 84 V92 M48.8 85 V91 M51.2 85 V91" stroke="#d6d3d1" stroke-width=".45"/></g>`;
+    if (pl.kind === 'cactus') return `<circle cx="48" cy="88.6" r="1" fill="#222"/><circle cx="51" cy="89" r="1" fill="#222"/><circle cx="49.5" cy="87.8" r="1" fill="#222"/>`;
+    return `<ellipse cx="50" cy="88.5" rx="4.4" ry="3" fill="url(#sd${u})"/><path d="M47.6 88 q2.4 -1.6 4.8 0" stroke="#4a2c12" stroke-width=".5" fill="none"/>`;
   }
 
-  if (pl.type === 'tree') {
-    const h = [0, 14, 28, 42, 46][st];
-    if (st === 1) return stem(h, 2) + leaf(50, 90 - h, -35, .8) + leaf(50, 90 - h, -145, .8);
-    g += `<path d="M46.5 90 C47.5 ${90 - h * .5} 48 ${90 - h * .8} 48.6 ${90 - h} L51.4 ${90 - h} C52 ${90 - h * .8} 52.5 ${90 - h * .5} 53.5 90Z" fill="url(#bk${u})"/>`;
-    if (pl.old) g += `<path d="M49 ${90 - h * .3} q-6 -6 -9 -14" stroke="#4a2f17" stroke-width="2" fill="none" stroke-linecap="round"/>`;
-    g += `<path d="M50 ${90 - h * .55} q6 -5 9 -12 M50 ${90 - h * .7} q-6 -4 -9 -10" stroke="#5b3a1e" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
-    const r = [0, 0, 13, 20, 23][st], cy = 90 - h - r * .35;
-    const colored = st === 4; // 満開（花・紅葉）のときは樹冠そのものに色をつける
-    const back = colored ? shade(P, -.3) : '#2e6f31', front = colored ? `url(#cf${u})` : `url(#cn${u})`;
-    const blobs = [[-r * .62, r * .25, r * .62], [r * .62, r * .25, r * .62], [0, -r * .2, r * .8], [-r * .35, -r * .45, r * .5], [r * .38, -r * .42, r * .5]];
-    blobs.forEach(([dx, dy, rr]) => g += `<circle cx="${50 + dx}" cy="${cy + dy + 1.5}" r="${rr}" fill="${back}"/>`);
-    blobs.forEach(([dx, dy, rr]) => g += `<circle cx="${50 + dx - .8}" cy="${cy + dy - .6}" r="${rr * .9}" fill="${front}"/>`);
-    // 小さな花・葉を散らす
-    const pts = [[-12, -6], [8, -13], [14, 3], [-3, 6], [-16, 7], [2, -4], [16, -7], [-8, -15], [9, 10], [-13, -1], [4, -18], [-4, 13], [12, -1], [-18, -6]];
-    if (st >= 3) pts.slice(0, st === 3 ? 5 : 14).forEach(([dx, dy], i) => {
-      const x = 50 + dx * r / 23, y = cy + dy * r / 23;
-      if (st === 3) g += `<circle cx="${x}" cy="${y}" r="1.6" fill="${P}"/>`;
-      else if (pl.fall) g += `<circle cx="${x}" cy="${y}" r="1.4" fill="${shade(P, i % 2 ? .35 : -.2)}"/>`;
-      else { for (let k = 0; k < 5; k++) g += `<ellipse cx="${x}" cy="${y - 1.3}" rx=".9" ry="1.4" fill="${shade(P, .3)}" transform="rotate(${k * 72} ${x} ${y})"/>`; g += `<circle cx="${x}" cy="${y}" r=".5" fill="#e11d48"/>`; }
-    });
-    return g;
-  }
-
-  if (pl.type === 'cactus') {
-    const h = [0, 10, 22, 36, 38][st], top = 90 - h;
-    if (st >= 3) {
-      g += `<path d="M43 ${76 - h / 3} h-5 a4 4 0 0 1 -4 -4 v-9" stroke="#2a6e2d" stroke-width="7.5" fill="none" stroke-linecap="round"/><path d="M43 ${76 - h / 3} h-5 a4 4 0 0 1 -4 -4 v-9" stroke="#5fb85a" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>`;
-      g += `<path d="M57 ${82 - h / 3} h5 a4 4 0 0 0 4 -4 v-11" stroke="#2a6e2d" stroke-width="7.5" fill="none" stroke-linecap="round"/><path d="M57 ${82 - h / 3} h5 a4 4 0 0 0 4 -4 v-11" stroke="#5fb85a" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>`;
-    }
-    g += `<rect x="42" y="${top}" width="16" height="${h + 2}" rx="8" fill="url(#cc${u})"/>`;
-    [46, 50, 54].forEach(x => g += `<path d="M${x} ${top + 4} V${88}" stroke="#2a6e2d" stroke-width=".6" opacity=".6"/>`);
-    for (let y = top + 5; y < 86; y += 5) [44, 48, 52, 56].forEach(x => g += `<path d="M${x} ${y} l-1.2 -1 M${x} ${y} l1.2 -1" stroke="#f1f5f9" stroke-width=".35"/>`);
-    if (st === 3) g += `<path d="M0 0 C2.5 -2 2.5 -6 0 -8 C-2.5 -6 -2.5 -2 0 0Z" fill="url(#bd${u})" transform="translate(50 ${top + 1})"/>`;
-    if (st === 4) {
-      for (let i = 0; i < 10; i++) g += `<path d="${petalPath(8, 2.4)}" fill="url(#pt${u})" transform="translate(50 ${top - 1}) rotate(${i * 36 - 90}) scale(1 ${i % 2 ? .85 : 1})"/>`;
-      g += `<circle cx="50" cy="${top - 1}" r="2.2" fill="#fde047"/>`;
-    }
-    return g;
-  }
-
-  // 茎のある植物
-  const h = [0, 14, 30, 48, 52][st], top = 90 - h;
-  if (pl.type === 'tulip') {
-    g += stem(h, 2.8);
-    if (st >= 2) g += leaf(50, 89, -62, st >= 3 ? 2.1 : 1.5) + leaf(50, 89, -118, st >= 3 ? 1.9 : 1.4);
-    else g += leaf(50, top + 1, -50, .7) + leaf(50, top + 1, -130, .7);
-  } else {
-    g += stem(h);
-    if (st === 1) g += leaf(50, top + 1, -30, .7) + leaf(50, top + 1, -150, .7);
-    if (st >= 2) {
-      const s = pl.type === 'cluster' ? 1.35 : 1;
-      g += leaf(50.6, 81, -25, s) + leaf(49.4, 74, -155, s);
-      if (st >= 3) g += leaf(50.8, 64, -35, .85 * s) + leaf(49.2, 57, -145, .85 * s);
-    }
-  }
-  if (st < 3) return g;
-
-  if (pl.type === 'spike') {
-    [[-8, 7, -14], [0, 0, 0], [8, 7, 14]].forEach(([dx, dy, rot]) => {
-      const bx = 50 + dx * .4, by = top + 10;
-      g += `<path d="M${bx} ${by} L${50 + dx + rot * .3} ${top + dy - 22}" stroke="#4d8c4a" stroke-width="1" />`;
-      for (let i = 0; i < 9; i++) {
-        const t = i / 8, x = 50 + dx + rot * .3 * t + (i % 2 ? 1.2 : -1.2), y = top + dy - t * 22;
-        g += `<ellipse cx="${x}" cy="${y}" rx="${st === 4 ? 1.9 : 1.4}" ry="${st === 4 ? 1.6 : 1.2}" fill="${st === 4 ? `url(#pt${u})` : '#a7d8a0'}"/>`;
+  switch (pl.kind) {
+    case 'sunflower': { // 太い茎・大きなハート形の葉・大輪
+      if (st === 1) return seedling(9, 7.5);
+      const h = [0, 0, 26, 50, 54][st], top = 90 - h, sl = toothed(4.6, 7, .12);
+      g += stemTo(50, 90, 50, top, st >= 3 ? 3.4 : 2.6, '#4d8a35', .03);
+      const ys = st === 2 ? [82, 72] : [84, 74, 64, 54, 46];
+      ys.forEach((y, i) => { const r = i % 2 ? -1 : 1; g += ln(`M50 ${y} l${r * 3} -2`, 1, '#4d8a35') + leaf(50 + r * 3, y - 2, r > 0 ? -18 : -162, st === 2 ? 12 : 15 - i, sl); });
+      if (st === 2) g += leaf(50, top, -40, 7, sl) + leaf(50, top, -140, 7, sl);
+      if (st === 3) { // 緑のがくに包まれたつぼみ
+        g += `<circle cx="50" cy="${top - 4}" r="6.5" fill="#3f7d2c"/>`;
+        for (let i = 0; i < 12; i++) g += `<path d="M0 -4 L1.6 -8.5 L-1.6 -8.5Z" fill="#5aa13f" transform="translate(50 ${top - 4}) rotate(${i * 30})"/>`;
+        g += `<circle cx="50" cy="${top - 4}" r="4.2" fill="#6bb04a"/>`;
       }
-    });
-    return g;
-  }
-  if (pl.type === 'cluster') { // あじさい
-    const cx = 50, cy = top - 8, R = st === 4 ? 15 : 9;
-    g += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${st === 4 ? shade(P, -.35) : '#5c9e57'}"/>`;
-    const cnt = st === 4 ? 46 : 18;
-    for (let i = 1; i <= cnt; i++) {
-      const rr = R * .88 * Math.sqrt(i / cnt), a = i * 2.39996, x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
-      if (st === 3) { g += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.3" fill="${i % 3 ? '#b7e4a8' : '#d9f2c9'}"/>`; continue; }
-      const col = [P, pl.petal2, shade(P, .25), shade(pl.petal2, -.1)][i % 4];
-      for (let k = 0; k < 4; k++) g += `<ellipse cx="${x.toFixed(2)}" cy="${(y - 1.3).toFixed(2)}" rx="1.1" ry="1.5" fill="${col}" transform="rotate(${k * 90 + i * 17} ${x.toFixed(2)} ${y.toFixed(2)})"/>`;
-      g += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r=".35" fill="#fef9c3"/>`;
+      if (st === 4) g += flower(50, top - 8, 20);
+      return g;
     }
-    return g;
+    case 'tulip': { // 球根から：とがった芽→根元の大きな葉→1本の茎
+      if (st === 1) return leaf(50, 90, -96, 10, 'lance') + leaf(50, 90, -84, 9, 'lance');
+      // 根元から出る、幅広で長い葉（少し外側にしなる）
+      const bl = 'M0 0 C2.5 -2.6 6.5 -2.4 10 .6 C6.5 2 2.5 2.4 0 0Z';
+      g += leaf(50, 90, -66, st === 2 ? 26 : 30, bl) + leaf(50, 90, -114, st === 2 ? 24 : 29, bl);
+      if (st === 2) return g + leaf(50, 90, -86, 20, bl);
+      const top = 90 - 50;
+      g += stemTo(50, 90, 50, top, 2.6, '#4f8f3a', .02) + leaf(50, 88, -96, 24, bl);
+      if (st === 3) return g + `<path d="M50 ${top + 1} C55 ${top - 3} 55 ${top - 12} 50 ${top - 17} C45 ${top - 12} 45 ${top - 3} 50 ${top + 1}Z" fill="url(#bd${u})"/><path d="M50 ${top + 1} C53 ${top - 3} 53 ${top - 8} 50 ${top - 11} C47 ${top - 8} 47 ${top - 3} 50 ${top + 1}Z" fill="#6aa84f" opacity=".7"/>`;
+      const t = top;
+      g += `<path d="M50 ${t + 2} C42 ${t - 2} 40 ${t - 16} 50 ${t - 23} C60 ${t - 16} 58 ${t - 2} 50 ${t + 2}Z" fill="${shade(P, -.3)}"/>`;
+      g += `<path d="M50 ${t + 3} C39 ${t + 1} 36 ${t - 12} 40 ${t - 21} C46 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
+      g += `<path d="M50 ${t + 3} C61 ${t + 1} 64 ${t - 12} 60 ${t - 21} C54 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
+      g += `<path d="M50 ${t + 3} C44 ${t - 2} 44 ${t - 14} 50 ${t - 20} C56 ${t - 14} 56 ${t - 2} 50 ${t + 3}Z" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".3"/>`;
+      return g + `<path d="M50 ${t} L50 ${t - 16}" stroke="${shade(P, .5)}" stroke-width=".5" opacity=".5"/>`;
+    }
+    case 'sakura': { // 苗木→葉のない枝につぼみ→花だけで満開（葉より先に咲く）
+      if (st === 1) return seedling(10, 5.5) + leaf(50, 80, -70, 6, toothed(3.6, 6, .15));
+      if (st === 2) {
+        const tr = tree(24, 1);
+        return tr.svg + tr.tips.map(([x, y], i) => leaf(x, y, i % 2 ? -30 : -150, 8, toothed(3.6, 6, .15))).join('');
+      }
+      const tr = tree(36, 3);
+      g += tr.svg;
+      if (st === 3) return g + tr.tips.map(([x, y]) => `<circle cx="${f2(x)}" cy="${f2(y)}" r="1.4" fill="${shade(P, -.15)}"/><circle cx="${f2(x)}" cy="${f2(y + 1)}" r=".9" fill="#7a5a3a"/>`).join('');
+      tr.tips.forEach(([x, y], i) => {
+        for (let k = 0; k < 4; k++) g += blossom(x + Math.cos(i * 2.3 + k * 1.7) * 3.2, y + Math.sin(i * 1.9 + k * 2.1) * 3, 3.4, k % 2 ? shade(P, .35) : P);
+      });
+      [[30, 104], [68, 100], [60, 110]].forEach(([x, y]) => g += `<ellipse cx="${x}" cy="${y - 20}" rx="1" ry=".7" fill="${P}" opacity=".8"/>`);
+      return g;
+    }
+    case 'momiji': { // 細長い子葉→手のひら形の葉→紅葉
+      if (st === 1) return seedling(10, 7, 'strap');
+      const pf = `url(#lf${u})`;
+      if (st === 2) {
+        const tr = tree(22, 1);
+        return tr.svg + tr.tips.map(([x, y], i) => leaf(x, y - 2, i * 40, 9, palm(), pf, false)).join('');
+      }
+      const tr = tree(38, 3), cols = st === 4 ? ['#dc2626', '#ea580c', '#f97316', '#b91c1c', '#f59e0b'] : [pf];
+      g += tr.svg;
+      tr.tips.forEach(([x, y], i) => {
+        for (let k = 0; k < 3; k++) g += leaf(x + Math.cos(i + k * 2.1) * 3, y + Math.sin(i * 1.3 + k * 2) * 3 - 1, i * 37 + k * 50, 8.5, palm(), cols[(i + k) % cols.length], false);
+      });
+      if (st === 4) g += leaf(30, 86, 20, 6, palm(), '#dc2626', false) + leaf(70, 87, -30, 6, palm(), '#f97316', false);
+      return g;
+    }
+    case 'cactus': { // 小さな球→とげのある柱→てっぺんにつぼみ・花
+      const hh = [0, 4, 11, 22, 23][st], w = [0, 4, 7, 8, 8][st], top = 90 - hh * 2;
+      g += `<path d="M${50 - w} 90 C${50 - w} ${top + w} ${50 - w * .6} ${top} 50 ${top} C${50 + w * .6} ${top} ${50 + w} ${top + w} ${50 + w} 90Z" fill="url(#cc${u})"/>`;
+      if (st >= 2) {
+        [-.55, 0, .55].forEach(r => g += `<path d="M${f2(50 + r * w)} ${top + 2} Q${f2(50 + r * w * 1.25)} ${f2((top + 90) / 2)} ${f2(50 + r * w)} 89" stroke="#245f27" stroke-width=".6" fill="none" opacity=".7"/>`);
+        for (let y = top + 4; y < 88; y += 4) [-.8, -.27, .27, .8].forEach(r => g += `<circle cx="${f2(50 + r * w)}" cy="${y}" r=".55" fill="#e7e5e4"/><path d="M${f2(50 + r * w)} ${y} l-1.4 -.9 M${f2(50 + r * w)} ${y} l1.4 -.9 M${f2(50 + r * w)} ${y} l0 -1.5" stroke="#f5f5f4" stroke-width=".3"/>`);
+      } else g += `<circle cx="50" cy="${top + 2}" r="1" fill="#e7e5e4"/>`;
+      if (st === 3) g += `<path d="M0 0 C2.5 -2 2.5 -6 0 -8 C-2.5 -6 -2.5 -2 0 0Z" fill="url(#bd${u})" transform="translate(50 ${top + 1})"/>`;
+      if (st === 4) {
+        for (let i = 0; i < 12; i++) g += `<path d="${petalPath(9, 2.3)}" fill="url(#pt${u})" transform="translate(50 ${top}) rotate(${i * 30 - 90}) scale(1 ${i % 2 ? .82 : 1})"/>`;
+        g += `<circle cx="50" cy="${top}" r="2.3" fill="#fde047"/>`;
+      }
+      return g;
+    }
+    case 'cosmos': { // 糸のように細い葉・細い茎・枝分かれして花
+      if (st === 1) return seedling(8, 6.5, 'line');
+      const feather = (x, y, rot, len) => { // 羽のような細い葉
+        let d = `M0 0 L10 0`;
+        for (let i = 1; i <= 4; i++) d += ` M${i * 2.2} 0 l1.8 -2.6 M${i * 2.2} 0 l1.8 2.6`;
+        return `<g transform="translate(${f2(x)} ${f2(y)}) rotate(${rot}) scale(${f2(len / 10)})">${ln(d, f2(.55 * 10 / len), '#4f9a43')}</g>`;
+      };
+      const h = [0, 0, 24, 50, 54][st], top = 90 - h;
+      g += stemTo(50, 90, 50, top, 1.5, '#4f8f3a', .05);
+      const ys = st === 2 ? [80, 72] : [84, 76, 68, 60];
+      ys.forEach((y, i) => g += feather(50, y, -25, 10) + feather(50, y - 1, -155, 10));
+      if (st === 2) return g + feather(50, top, -60, 7) + feather(50, top, -120, 7);
+      const sides = [[50, 66, 36, 46], [50, 60, 64, 42]];
+      sides.forEach(([x0, y0, x1, y1]) => g += stemTo(x0, y0, x1, y1, 1.1, '#4f8f3a', -.1));
+      if (st === 3) return g + [[50, top], [36, 46], [64, 42]].map(([x, y]) => `<circle cx="${x}" cy="${y - 2.5}" r="2.6" fill="url(#bd${u})"/><path d="M${x - 2.6} ${y - 1.5} l2.6 1.5 l2.6 -1.5" stroke="#3f8a3c" stroke-width=".8" fill="none"/>`).join('');
+      return g + flower(36, 44, 9) + flower(64, 40, 10) + flower(50, top - 4, 12);
+    }
+    case 'lavender': { // 根元からたくさんの細い灰緑の葉・細長い穂
+      if (st === 1) return seedling(7, 5, 'line');
+      const GG = '#7aa37a';
+      const tufts = st === 2 ? 3 : 5;
+      for (let i = 0; i < tufts; i++) {
+        const x = 50 + (i - (tufts - 1) / 2) * 4, hh = st === 2 ? 12 : 16;
+        g += stemTo(50, 90, x, 90 - hh, 1, '#6b7f5a', 0);
+        for (let k = 0; k < 4; k++) g += leaf(x + (50 - x) * k * .2, 90 - hh + k * 3.2, (k % 2 ? -40 : -140) + (x - 50), 7, 'line', GG, false);
+      }
+      if (st === 2) return g;
+      [-12, -6, 0, 6, 12].forEach((dx, i) => {
+        const x1 = 50 + dx * 1.3, y1 = 90 - 46 + Math.abs(dx) * .8;
+        g += stemTo(50 + dx * .2, 76, x1, y1, .9, '#6b7f5a', 0);
+        for (let k = 0; k < 8; k++) {
+          const t = k / 7, x = x1 + (k % 2 ? .9 : -.9), y = y1 - 1 - t * 11;
+          g += `<ellipse cx="${f2(x)}" cy="${f2(y)}" rx="${st === 4 ? 1.6 : 1.1}" ry="${st === 4 ? 1.4 : 1}" fill="${st === 4 ? (k % 3 ? P : shade(P, -.25)) : '#9fbf8f'}"/>`;
+        }
+      });
+      return g;
+    }
+    case 'asagao': { // チョウの形の双葉→ハート形の葉→支柱にまきつくつる→ラッパ形の花
+      if (st === 1) return seedling(8, 7, 'butterfly');
+      const stake = st >= 3 ? `<path d="M50 91 V${90 - 60}" stroke="#d6c08a" stroke-width="1.6"/><path d="M50 91 V${90 - 60}" stroke="#b39a5f" stroke-width=".5" stroke-dasharray="1 5"/>` : '';
+      if (st === 2) return stemTo(50, 90, 50, 74, 1.4, '#6aa84f', .1) + cotyl(50, 84, 6, 'butterfly') + leaf(50, 74, -40, 9, 'heart') + leaf(50, 74, -150, 8, 'heart') + ln('M50 74 q4 -3 1 -6 q-2 -2 0 -4', .6, '#6aa84f');
+      g += stake;
+      let d = 'M50 90', y = 90;
+      for (let i = 0; i < 10; i++) { const x = i % 2 ? 46 : 54; y -= 5.6; d += ` Q${x} ${f2(y + 2.8)} 50 ${f2(y)}`; }
+      g += ln(d, 1.3, '#5f9e45') + cotyl(50, 86, 5, 'butterfly');
+      [[80, -20], [70, -160], [62, -15], [52, -165], [44, -25]].forEach(([yy, rot]) => g += leaf(50, yy, rot, 10, 'heart'));
+      if (st === 3) return g + [[58, 52, 25], [42, 62, -25]].map(([x, yy, r]) => `<g transform="translate(${x} ${yy}) rotate(${r})"><path d="M0 0 C2 -2 2 -8 0 -11 C-2 -8 -2 -2 0 0Z" fill="url(#bd${u})"/><path d="M-1.4 -2 L1.4 -4 M-1.4 -5 L1.4 -7 M-1.2 -8 L1 -9.5" stroke="${shade(P, .5)}" stroke-width=".5"/></g>`).join('');
+      // 横向きのラッパ形の花＋正面の花
+      g += ln('M50 58 Q54 56 56 52', 1, '#5f9e45') + `<g transform="translate(56 52) rotate(35)"><path d="M0 0 L-1.5 -8 C-7 -10 -8 -15 -7 -16 C-3 -13 3 -13 7 -16 C8 -15 7 -10 1.5 -8 Z" fill="url(#pt${u})"/><path d="M0 0 L-1 -8 L1 -8Z" fill="${shade(P, .6)}"/></g>`;
+      g += flower(40, 64, 10);
+      g += `<path d="M${40} ${64} m0 -8 L40 72 M32 64 L48 64" stroke="${shade(P, .65)}" stroke-width=".5" opacity=".6"/>`;
+      return g;
+    }
+    case 'tanpopo': { // 地面に広がるギザギザの葉（ロゼット）・葉のない茎・わた毛
+      if (st === 1) return seedling(5, 5) + leaf(50, 85, -60, 5, toothed(1.6, 4, .55));
+      const tl = toothed(1.9, 6, .6), n = st === 2 ? 5 : 7;
+      for (let i = 0; i < n; i++) g += leaf(50, 89.5, i % 2 ? -6 - i * 5 : -174 + i * 5, (st === 2 ? 13 : 16) - i * .6, tl);
+      if (st === 2) return g;
+      const top = 90 - 40;
+      g += stemTo(50, 89, 52, top, 1.4, '#7bb661', .03);
+      if (st === 3) return g + bud(52, top + 1, .8, 0) ;
+      g += flower(52, top - 4, 11);
+      // わた毛（2本目の茎）
+      g += stemTo(50, 89, 38, 56, 1.2, '#7bb661', -.05) + `<circle cx="38" cy="52" r=".9" fill="#a3a3a3"/>`;
+      for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; g += `<path d="M38 52 L${f2(38 + Math.cos(a) * 6)} ${f2(52 + Math.sin(a) * 6)}" stroke="#e5e7eb" stroke-width=".35"/><circle cx="${f2(38 + Math.cos(a) * 6)}" cy="${f2(52 + Math.sin(a) * 6)}" r=".7" fill="#f8fafc" stroke="#d4d4d8" stroke-width=".2"/>`; }
+      return g;
+    }
+    case 'rose': { // とげのある茎・小さな葉が5枚の複葉・とがったつぼみ
+      if (st === 1) return seedling(8, 5.5);
+      const comp = (x, y, rot, s) => { // 複葉
+        const lt = toothed(3.2, 5, .2);
+        let c = ln('M0 0 L10 0', .7, '#3f6f2f');
+        [[3, -1], [3, 1], [6.5, -1], [6.5, 1]].forEach(([px, sgn]) => c += leaf(px, 0, sgn * 55, 4.6, lt, LF, false));
+        c += leaf(10, 0, 0, 5, lt, LF, false);
+        return `<g transform="translate(${f2(x)} ${f2(y)}) rotate(${rot}) scale(${s})">${c}</g>`;
+      };
+      const h = [0, 0, 26, 46, 50][st], top = 90 - h;
+      g += stemTo(50, 90, 50, top, 2, '#3f6f2f', .04);
+      for (let y = 86; y > top + 4; y -= 7) g += `<path d="M50 ${y} l${y % 2 ? 2.2 : -2.2} -1.2 l0 2Z" fill="#a16207"/>`;
+      const ys = st === 2 ? [80, 70] : [82, 72, 62, 54];
+      ys.forEach((y, i) => g += comp(50, y, i % 2 ? -150 : -30, st === 2 ? 1 : 1.15));
+      if (st === 2) return g;
+      if (st === 3) return g + bud(50, top, 1, 0);
+      g += stemTo(50, 64, 60, 50, 1.4, '#3f6f2f', -.1) + bud(60, 50, .6, 20);
+      return g + flower(50, top - 6, 13);
+    }
+    case 'daisy': { // ふかく切れこんだ葉がこんもり・何本もの花茎
+      if (st === 1) return seedling(7, 5.5);
+      const dl = toothed(2.4, 5, .55);
+      for (let i = 0; i < (st === 2 ? 6 : 9); i++) g += leaf(50, 89, -15 - i * (150 / (st === 2 ? 5 : 8)), st === 2 ? 12 : 14, dl);
+      if (st === 2) return g;
+      const heads = [[50, 42], [38, 50], [62, 48], [44, 58]];
+      heads.forEach(([x, y]) => g += stemTo(50, 86, x, y, 1.1, '#4f8f3a', 0));
+      if (st === 3) return g + heads.map(([x, y]) => `<circle cx="${x}" cy="${y - 2}" r="2.6" fill="#7bb661"/><circle cx="${x}" cy="${y - 2.4}" r="1.6" fill="#a3d977"/>`).join('');
+      return g + heads.map(([x, y], i) => flower(x, y - 3, i ? 8.5 : 10)).join('');
+    }
+    case 'hydrangea': { // 木のような茎・大きなギザギザの葉が向かい合う・最初は緑の花
+      if (st === 1) return seedling(9, 6) + leaf(50, 81, -60, 6, toothed(4, 6, .1));
+      const hl = toothed(4.6, 8, .12), stems = st === 2 ? [[50, 66]] : [[42, 54], [58, 50]];
+      stems.forEach(([x, y]) => {
+        g += stemTo(50, 90, x, y, 2, '#6b5a3a', .04);
+        [.75, .45].forEach(t => { const yy = 90 + (y - 90) * t, xx = 50 + (x - 50) * t; g += leaf(xx, yy, -20, st === 2 ? 13 : 12, hl) + leaf(xx, yy, -160, st === 2 ? 13 : 12, hl); });
+      });
+      if (st === 2) return g + leaf(50, 66, -70, 8, hl) + leaf(50, 66, -110, 8, hl);
+      stems.forEach(([x, y], si) => {
+        const cy = y - 9, R = st === 4 ? 11 : 8;
+        g += `<circle cx="${x}" cy="${cy}" r="${R}" fill="${st === 4 ? shade(P, -.35) : '#6ea85a'}"/>`;
+        const cnt = st === 4 ? 30 : 18;
+        for (let i = 1; i <= cnt; i++) {
+          const rr = R * .86 * Math.sqrt(i / cnt), a = i * 2.39996 + si, xx = x + rr * Math.cos(a), yy = cy + rr * Math.sin(a);
+          const col = st === 4 ? [P, pl.petal2, shade(P, .25), shade(pl.petal2, -.1)][i % 4] : ['#b7e4a8', '#d9f2c9', '#a3d48f'][i % 3];
+          for (let k = 0; k < 4; k++) g += `<ellipse cx="${f2(xx)}" cy="${f2(yy - 1.2)}" rx="1.1" ry="1.4" fill="${col}" transform="rotate(${k * 90 + i * 17} ${f2(xx)} ${f2(yy)})"/>`;
+        }
+      });
+      return g;
+    }
+    case 'hibiscus': { // 低い木・つやのある卵形の葉・ねじれた長いつぼみ
+      if (st === 1) return seedling(8, 6);
+      const hl = toothed(4, 7, .1), h = [0, 0, 26, 44, 46][st], top = 90 - h;
+      g += stemTo(50, 90, 50, top, 2.2, '#6b5a3a', .03);
+      if (st >= 3) g += stemTo(50, 72, 38, 56, 1.5, '#6b5a3a', -.05);
+      const lv = st === 2 ? [[50, 80, -25], [50, 72, -155], [50, top, -70]] : [[50, 80, -20], [50, 70, -160], [50, 60, -25], [44, 64, -150], [38, 56, -120], [50, top + 2, -60]];
+      lv.forEach(([x, y, r]) => g += leaf(x, y, r, 11, hl));
+      if (st === 2) return g;
+      const twisted = (x, y, r) => `<g transform="translate(${x} ${y}) rotate(${r})"><path d="M0 0 C3 -3 3 -12 0 -16 C-3 -12 -3 -3 0 0Z" fill="url(#bd${u})"/><path d="M-1.5 -4 L1.5 -7 M-1.5 -8 L1.5 -11 M-1 -12 L1 -14" stroke="${shade(P, -.4)}" stroke-width=".5"/><path d="M0 1 C-3 -1 -3.5 -4 -2.4 -6 C-1.5 -3 -.6 -1 0 1Z M0 1 C3 -1 3.5 -4 2.4 -6 C1.5 -3 .6 -1 0 1Z" fill="#3f8a3c"/></g>`;
+      if (st === 3) return g + twisted(50, top, 0) + twisted(38, 56, -30);
+      return g + twisted(38, 56, -30) + flower(50, top - 6, 16);
+    }
   }
-  if (st === 3) { // つぼみ
-    g += `<path d="M0 0 C5 -3 5.5 -12 0 -17 C-5.5 -12 -5 -3 0 0Z" fill="url(#bd${u})" transform="translate(50 ${top})"/>`;
-    g += leaf(50, top + 1, -70, .55) + leaf(50, top + 1, -110, .55);
-    return g;
-  }
-  if (pl.type === 'tulip') {
-    const t = top;
-    g += `<path d="M50 ${t + 2} C42 ${t - 2} 40 ${t - 16} 50 ${t - 23} C60 ${t - 16} 58 ${t - 2} 50 ${t + 2}Z" fill="${shade(P, -.3)}"/>`;
-    g += `<path d="M50 ${t + 3} C39 ${t + 1} 36 ${t - 12} 40 ${t - 21} C46 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
-    g += `<path d="M50 ${t + 3} C61 ${t + 1} 64 ${t - 12} 60 ${t - 21} C54 ${t - 15} 50 ${t - 7} 50 ${t + 3}Z" fill="url(#pt${u})"/>`;
-    g += `<path d="M50 ${t + 3} C44 ${t - 2} 44 ${t - 14} 50 ${t - 20} C56 ${t - 14} 56 ${t - 2} 50 ${t + 3}Z" fill="url(#pt${u})" stroke="${shade(P, -.35)}" stroke-width=".3"/>`;
-    g += `<path d="M50 ${t} L50 ${t - 16}" stroke="${shade(P, .5)}" stroke-width=".5" opacity=".5"/>`;
-    return g;
-  }
-  return g + bloom(50, top - 6, 17 * (pl.big || 1));
+  return g;
 }
 
 const PLANT_MAX_DRAW = 4; // 1つの鉢に描く最大本数
