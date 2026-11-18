@@ -65,7 +65,7 @@
     .auth-hint{font-size:12px;color:var(--sub);text-align:center;line-height:1.6;}
 
     /* ── common header ── */
-    .s-header{display:flex;align-items:center;width:100%;margin-bottom:20px;padding-top:4px;}
+    .s-header{display:flex;align-items:center;width:100%;margin-bottom:20px;padding-top:4px;padding-right:56px;}
     .back-btn{background:none;border:none;font-size:22px;cursor:pointer;padding:4px 10px 4px 0;color:var(--p1);-webkit-tap-highlight-color:transparent;}
     .s-title{font-size:18px;font-weight:bold;color:var(--title);flex:1;}
     .s-action{background:none;border:none;font-size:14px;color:var(--p1);cursor:pointer;font-weight:bold;-webkit-tap-highlight-color:transparent;}
@@ -195,7 +195,7 @@
     .doc-content img{max-width:100% !important;height:auto !important;object-fit:contain;vertical-align:middle;}
     .doc-content.editing{outline:2px dashed var(--p1);outline-offset:-2px;-webkit-touch-callout:default;caret-color:var(--p1);}
     .doc-content.editing .red-hidden{-webkit-user-select:text;user-select:text;}
-    .doc-edit-btn{margin-left:auto;margin-right:50px;padding:7px 14px;border:none;border-radius:10px;background:var(--badge-bg);color:var(--badge-fg);font-size:14px;font-weight:bold;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
+    .doc-edit-btn{margin-left:auto;padding:7px 14px;border:none;border-radius:10px;background:var(--badge-bg);color:var(--badge-fg);font-size:14px;font-weight:bold;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
     .doc-edit-btn.on{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;}
     .blank-doc-btn{width:100%;margin-top:10px;padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--title);font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 
@@ -340,6 +340,21 @@
     .timer-btn-start:active{opacity:.8;}
     .timer-btn-stop{width:100%;padding:14px;background:none;border:2px solid var(--s1);color:var(--s1);border-radius:14px;font-size:15px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s;}
     .timer-btn-stop:active{background:var(--ul-hover);}
+    /* ── pomodoro ── */
+    .pomo-phase{display:inline-block;margin-top:14px;padding:5px 14px;border-radius:999px;font-size:13px;font-weight:bold;background:var(--badge-bg);color:var(--badge-fg);}
+    .pomo-phase.break{background:#d1fae5;color:#047857;}
+    .pomo-bar{width:100%;height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin:2px 0 10px;}
+    .pomo-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--p1),var(--p2));transition:width 1s linear;}
+    .pomo-bar-fill.break{background:linear-gradient(90deg,#34d399,#6ee7b7);}
+    .pomo-count{font-size:13px;color:var(--sub);margin-bottom:16px;min-height:18px;}
+    .pomo-set-row{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+    .pomo-set-label{font-size:12px;font-weight:bold;color:var(--sub);width:44px;text-align:left;}
+    .pomo-chip{padding:6px 12px;border-radius:999px;border:2px solid var(--border);background:var(--card-bg);color:var(--title);font-size:13px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+    .pomo-chip.active{border-color:var(--p1);background:var(--badge-bg);color:var(--badge-fg);}
+    .pomo-chip:disabled{opacity:.5;cursor:not-allowed;}
+    .pomo-sub-btns{display:flex;gap:10px;}
+    .pomo-sub-btns .timer-btn-stop{flex:1;}
+    .timer-fs-phase{font-size:16px;font-weight:bold;color:rgba(255,255,255,.7);margin-bottom:10px;min-height:20px;}
     .study-log-section{width:100%;}
     .study-log-title{font-size:16px;font-weight:bold;color:var(--title);margin-bottom:12px;}
     .log-group{background:var(--card-bg);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
@@ -558,11 +573,39 @@
     <input type="text" class="f-input" id="timer-subject" placeholder="例: 英単語, 数学, リーディング..." style="margin-bottom:14px">
     <div class="color-picker-label">カラー</div>
     <div class="color-picker-row" id="timer-color-row"></div>
-    <div class="timer-digits" id="timer-digits" onclick="openFullscreenTimer()">00:00:00</div>
-    <div class="timer-fs-hint-small">タップで全画面</div>
-    <div class="timer-btns">
-      <button class="timer-btn-start" id="timer-start-btn" onclick="toggleTimer()">▶ 開始</button>
-      <button class="timer-btn-stop" id="timer-stop-btn" style="display:none" onclick="finishTimer()">■ 終了して保存</button>
+    <div class="home-tabs" style="margin:16px 0 0">
+      <button class="home-tab active" id="tmode-sw" onclick="setTimerMode('sw')">⏱ ストップウォッチ</button>
+      <button class="home-tab" id="tmode-pomo" onclick="setTimerMode('pomo')">🍅 ポモドーロ</button>
+    </div>
+    <div id="sw-section">
+      <div class="timer-digits" id="timer-digits" onclick="openFullscreenTimer()">00:00:00</div>
+      <div class="timer-fs-hint-small">タップで全画面</div>
+      <div class="timer-btns">
+        <button class="timer-btn-start" id="timer-start-btn" onclick="toggleTimer()">▶ 開始</button>
+        <button class="timer-btn-stop" id="timer-stop-btn" style="display:none" onclick="finishTimer()">■ 終了して保存</button>
+      </div>
+    </div>
+    <div id="pomo-section" style="display:none">
+      <div class="pomo-phase" id="pomo-phase">集中</div>
+      <div class="timer-digits" id="pomo-digits" onclick="openFullscreenTimer()" style="margin-top:8px">25:00</div>
+      <div class="pomo-bar"><div class="pomo-bar-fill" id="pomo-bar-fill"></div></div>
+      <div class="pomo-count" id="pomo-count"></div>
+      <div class="pomo-set-row">
+        <span class="pomo-set-label">集中</span>
+        <div id="pomo-work-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="pomo-set-row" style="margin-bottom:16px">
+        <span class="pomo-set-label">休憩</span>
+        <div id="pomo-break-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="timer-btns">
+        <button class="timer-btn-start" id="pomo-start-btn" onclick="pomoToggle()">▶ 集中スタート</button>
+        <div class="pomo-sub-btns">
+          <button class="timer-btn-stop" id="pomo-skip-btn" onclick="pomoSkip()">⏭ スキップ</button>
+          <button class="timer-btn-stop" id="pomo-reset-btn" onclick="pomoReset()">↺ リセット</button>
+        </div>
+      </div>
+      <div class="timer-fs-hint-small" style="margin:12px 0 0">集中が終わるたびに学習履歴へ自動で記録されます</div>
     </div>
   </div>
   <button class="manual-open-btn" onclick="toggleManualAdd()">＋ 手動で学習時間を記録</button>
@@ -706,6 +749,7 @@
 <!-- Fullscreen timer overlay -->
 <div class="timer-fullscreen" id="timer-fullscreen" onclick="closeFullscreenTimer()">
   <div class="timer-fs-close" onclick="closeFullscreenTimer();event.stopPropagation()">✕</div>
+  <div class="timer-fs-phase" id="timer-fs-phase"></div>
   <div class="timer-fs-digits" id="timer-fs-digits">00:00:00</div>
   <div class="timer-fs-subject" id="timer-fs-subject"></div>
 </div>
@@ -1745,6 +1789,7 @@ function renderColorPicker() {
 function selectTimerColor(c) { timerColor = c; renderColorPicker(); }
 
 function renderTimerScreen() {
+  setTimerMode(timerMode, true);
   updateTimerDisplay();
   renderColorPicker();
   renderStudyLogList();
@@ -1775,7 +1820,7 @@ function updateTimerDisplay() {
   const el = document.getElementById('timer-digits');
   if (el) el.textContent = str;
   const fsEl = document.getElementById('timer-fs-digits');
-  if (fsEl) fsEl.textContent = str;
+  if (fsEl && timerMode !== 'pomo') fsEl.textContent = str;
 }
 
 /* ── Fullscreen timer ── */
@@ -1788,7 +1833,7 @@ async function openFullscreenTimer() {
   if (fsEl) fsEl.style.color = col;
   const subVal = document.getElementById('timer-subject')?.value.trim();
   if (subEl) subEl.textContent = subVal || '';
-  updateTimerDisplay();
+  if (timerMode === 'pomo') pomoRender(); else { document.getElementById('timer-fs-phase').textContent = ''; updateTimerDisplay(); }
   fs.classList.add('open');
   try { if ('wakeLock' in navigator) _wakeLock = await navigator.wakeLock.request('screen'); } catch {}
 }
@@ -1889,6 +1934,160 @@ function finishTimer() {
   const durStr = mins > 0 ? `${mins}分${secs}秒` : `${secs}秒`;
   alert(`学習記録を保存しました！\n「${subject}」 ${durStr}`);
 }
+
+/* ── ポモドーロ ── */
+// 状態は時刻で持つので、画面を閉じたりアプリを切り替えても正しく進む
+const POMO_KEY = 'tc-pomo';
+const POMO_WORK_OPTS = [15, 25, 45, 50];
+const POMO_BREAK_OPTS = [5, 10, 15];
+var timerMode = (() => { try { return localStorage.getItem('tc-timer-mode') || 'sw'; } catch { return 'sw'; } })();
+let pomo = (() => {
+  const d = { work: 25, brk: 5, phase: 'work', running: false, endTs: null, remain: 25 * 60, count: 0, countDate: '' };
+  try { return Object.assign(d, JSON.parse(localStorage.getItem(POMO_KEY)) || {}); } catch { return d; }
+})();
+let pomoInterval = null;
+function pomoSave() { try { localStorage.setItem(POMO_KEY, JSON.stringify(pomo)); } catch {} }
+function pomoPhaseLen() { return (pomo.phase === 'work' ? pomo.work : pomo.brk) * 60; }
+function pomoRemain() {
+  return pomo.running ? Math.max(0, Math.ceil((pomo.endTs - Date.now()) / 1000)) : pomo.remain;
+}
+function pomoTodayCount() { return pomo.countDate === toDateStr(new Date()) ? pomo.count : 0; }
+
+function setTimerMode(mode, silent) {
+  if (!silent && mode !== timerMode) {
+    if (mode === 'pomo' && (timerRunning || timerElapsed > 0)) { alert('ストップウォッチを終了してから切り替えてください'); return; }
+    if (mode === 'sw' && (pomo.running || pomo.remain !== pomoPhaseLen())) { alert('ポモドーロをリセットしてから切り替えてください'); return; }
+  }
+  timerMode = mode;
+  try { localStorage.setItem('tc-timer-mode', mode); } catch {}
+  document.getElementById('tmode-sw').classList.toggle('active', mode === 'sw');
+  document.getElementById('tmode-pomo').classList.toggle('active', mode === 'pomo');
+  document.getElementById('sw-section').style.display = mode === 'sw' ? '' : 'none';
+  document.getElementById('pomo-section').style.display = mode === 'pomo' ? '' : 'none';
+  if (mode === 'pomo') pomoRender();
+}
+
+function pomoRender() {
+  const r = pomoRemain(), len = pomoPhaseLen();
+  const str = `${String(Math.floor(r / 60)).padStart(2, '0')}:${String(r % 60).padStart(2, '0')}`;
+  const isBreak = pomo.phase === 'break';
+  const label = isBreak ? '☕ 休憩中' : '🍅 集中';
+  const $ = id => document.getElementById(id);
+  if (!$('pomo-digits')) return;
+  $('pomo-digits').textContent = str;
+  $('pomo-phase').textContent = label;
+  $('pomo-phase').classList.toggle('break', isBreak);
+  $('pomo-bar-fill').style.width = (100 * (len - r) / len) + '%';
+  $('pomo-bar-fill').classList.toggle('break', isBreak);
+  const n = pomoTodayCount();
+  $('pomo-count').textContent = n ? `今日 ${'🍅'.repeat(Math.min(n, 8))}${n > 8 ? '…' : ''} ${n}回` : '今日はまだ0回';
+  const fresh = !pomo.running && r === len;
+  $('pomo-start-btn').textContent = pomo.running ? '⏸ 一時停止'
+    : fresh ? (isBreak ? '▶ 休憩スタート' : '▶ 集中スタート') : '▶ 再開';
+  $('pomo-work-chips').innerHTML = POMO_WORK_OPTS.map(m =>
+    `<button class="pomo-chip ${m === pomo.work ? 'active' : ''}" onclick="pomoSetLen('work',${m})" ${fresh ? '' : 'disabled'}>${m}分</button>`).join('');
+  $('pomo-break-chips').innerHTML = POMO_BREAK_OPTS.map(m =>
+    `<button class="pomo-chip ${m === pomo.brk ? 'active' : ''}" onclick="pomoSetLen('brk',${m})" ${fresh ? '' : 'disabled'}>${m}分</button>`).join('');
+  document.getElementById('timer-screen').classList.toggle('timer-running', pomo.running && !isBreak);
+  if (timerMode === 'pomo') {
+    const fsEl = $('timer-fs-digits'), fsPh = $('timer-fs-phase');
+    if (fsEl) { fsEl.textContent = str; fsEl.style.color = isBreak ? '#6ee7b7' : (timerColor || '#fff'); }
+    if (fsPh) fsPh.textContent = label;
+  }
+}
+
+function pomoSetLen(kind, m) {
+  pomo[kind] = m;
+  pomo.remain = pomoPhaseLen();
+  pomoSave(); pomoRender();
+}
+
+function pomoStartTicking() {
+  clearInterval(pomoInterval);
+  pomoInterval = setInterval(pomoTick, 1000);
+}
+function pomoTick() {
+  if (pomo.running && Date.now() >= pomo.endTs) { pomoPhaseEnd(true); return; }
+  pomoRender();
+}
+
+function pomoToggle() {
+  if (pomo.running) {
+    pomo.remain = pomoRemain();
+    pomo.running = false; pomo.endTs = null;
+    clearInterval(pomoInterval); pomoInterval = null;
+  } else {
+    pomo.running = true;
+    pomo.endTs = Date.now() + pomo.remain * 1000;
+    pomoStartTicking();
+  }
+  pomoSave(); pomoRender();
+}
+
+// フェーズ終了：集中なら記録して休憩へ、休憩なら次の集中へ（次は自分でスタート）
+function pomoPhaseEnd(notify) {
+  clearInterval(pomoInterval); pomoInterval = null;
+  const wasWork = pomo.phase === 'work';
+  if (wasWork) {
+    const dur = pomo.work * 60;
+    const subject = (document.getElementById('timer-subject')?.value.trim()) || 'ポモドーロ';
+    const log = loadStudyLog();
+    log.unshift({ id: uid(), subject, color: timerColor, duration: dur,
+      date: toDateStr(new Date(pomo.endTs || Date.now())),
+      startTime: new Date((pomo.endTs || Date.now()) - dur * 1000).toISOString() });
+    persistStudyLog(log);
+    const today = toDateStr(new Date());
+    if (pomo.countDate !== today) { pomo.countDate = today; pomo.count = 0; }
+    pomo.count++;
+    renderStudyLogList(); updateTimerHomeSub();
+  }
+  pomo.phase = wasWork ? 'break' : 'work';
+  pomo.running = false; pomo.endTs = null;
+  pomo.remain = pomoPhaseLen();
+  pomoSave(); pomoRender();
+  if (notify) pomoNotify(wasWork ? '集中おつかれさま！休憩しよう ☕' : '休憩おわり！次の集中をはじめよう 🍅');
+}
+
+function pomoSkip() {
+  if (pomo.phase === 'work' && !confirm('この集中をスキップしますか？\n（記録はされません）')) return;
+  clearInterval(pomoInterval); pomoInterval = null;
+  pomo.phase = pomo.phase === 'work' ? 'break' : 'work';
+  pomo.running = false; pomo.endTs = null; pomo.remain = pomoPhaseLen();
+  pomoSave(); pomoRender();
+}
+function pomoReset() {
+  clearInterval(pomoInterval); pomoInterval = null;
+  pomo.phase = 'work'; pomo.running = false; pomo.endTs = null; pomo.remain = pomoPhaseLen();
+  pomoSave(); pomoRender();
+}
+
+function pomoNotify(msg) {
+  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch {}
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      [0, 0.35, 0.7].forEach(t => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.3);
+        o.connect(g).connect(ctx.destination);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.32);
+      });
+      setTimeout(() => ctx.close(), 1500);
+    }
+  } catch {}
+  setTimeout(() => alert(msg), 50);
+}
+
+// 起動時・アプリに戻ったとき：時間が過ぎていたら終了処理
+function pomoCatchUp() {
+  if (pomo.running && Date.now() >= pomo.endTs) pomoPhaseEnd(true);
+  else if (pomo.running) pomoStartTicking();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pomoCatchUp(); pomoRender(); } });
 
 function fmtDuration(sec) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
@@ -2594,6 +2793,7 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Init ── */
+pomoCatchUp();
 renderUserArea();
 renderHome();
 loadBgImage();
