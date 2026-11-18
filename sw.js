@@ -8,6 +8,9 @@ const CDN_URLS = [
   'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
   'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js',
   'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js',
+  // PDF表示用（はじめてPDFを開いたときに読み込んで保存）
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
 ];
 
 self.addEventListener('install', e => {
@@ -15,7 +18,7 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(cache => {
       cache.addAll(['./index.html', './manifest.json', './icon.svg']).catch(() => {});
-      return Promise.allSettled(CDN_URLS.map(url => cache.add(url)));
+      return Promise.allSettled(CDN_URLS.filter(u => !u.includes('pdf.js')).map(url => cache.add(url)));
     })
   );
 });

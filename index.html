@@ -196,6 +196,17 @@
     .doc-content img{max-width:100% !important;height:auto !important;object-fit:contain;vertical-align:middle;}
     .doc-content.editing{outline:2px dashed var(--p1);outline-offset:-2px;-webkit-touch-callout:default;caret-color:var(--p1);}
     .doc-content.editing .red-hidden{-webkit-user-select:text;user-select:text;}
+    .doc-content.pdf-mode{padding:8px;background:var(--border);overflow-x:auto;min-height:60vh;}
+    #doc-view-screen.pdf-wide{max-width:900px;} /* パソコンではPDFを広く表示 */
+    .pdf-pages{display:flex;flex-direction:column;gap:8px;align-items:flex-start;margin:0 auto;}
+    .pdf-page{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.15);position:relative;}
+    .pdf-page canvas{display:block;width:100%;height:100%;}
+    .pdf-msg{padding:40px 16px;text-align:center;color:var(--sub);font-size:14px;line-height:1.7;}
+    .pdf-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card-bg);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;align-items:center;gap:6px;padding:6px 10px;z-index:100;font-size:13px;font-weight:bold;color:var(--title);}
+    .pdf-bar.open{display:flex;}
+    .pdf-bar button{width:34px;height:34px;border-radius:50%;border:none;background:var(--badge-bg);color:var(--badge-fg);font-size:18px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+    .pdf-bar span{min-width:46px;text-align:center;}
+    .pdf-bar .pdf-pg{color:var(--sub);font-weight:normal;min-width:54px;}
     .doc-edit-btn{margin-left:auto;padding:7px 14px;border:none;border-radius:10px;background:var(--badge-bg);color:var(--badge-fg);font-size:14px;font-weight:bold;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
     .doc-edit-btn.on{background:linear-gradient(135deg,var(--p1),var(--p2));color:#fff;}
     .blank-doc-btn{width:100%;margin-top:10px;padding:12px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--title);font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -724,10 +735,10 @@
   </div>
   <div class="upload-area" id="doc-upload-area">
     <div class="ul-icon">📄</div>
-    <div class="ul-title">Word・テキストファイルをアップロード</div>
+    <div class="ul-title">Word・テキスト・PDFをアップロード</div>
     <div class="ul-sub">タップ、またはドラッグ＆ドロップ</div>
     <button class="ul-pick" onclick="document.getElementById('doc-file-input').click()">ファイルを選択</button>
-    <input type="file" id="doc-file-input" accept=".docx,.txt,text/plain" style="display:none">
+    <input type="file" id="doc-file-input" accept=".docx,.txt,text/plain,.pdf,application/pdf" style="display:none">
     <div class="ul-count" id="doc-ul-count" style="display:none"></div>
   </div>
   <div style="width:100%;margin-bottom:4px">
@@ -736,7 +747,7 @@
   </div>
   <button class="save-btn" id="doc-save-btn" disabled onclick="saveDoc()">保存して開く</button>
   <button class="blank-doc-btn" onclick="createBlankDoc()">✏️ ファイルなしで白紙から書く</button>
-  <div class="hint-box"><strong>対応ファイル</strong>Word文書（.docx）：テキスト・見出し・リスト・画像などを表示できます<br>テキストファイル（.txt）：そのままの文章を表示できます</div>
+  <div class="hint-box"><strong>対応ファイル</strong>Word文書（.docx）：テキスト・見出し・リスト・画像などを表示できます<br>テキストファイル（.txt）：そのままの文章を表示できます<br>PDF（.pdf）：見た目そのままで表示できます（この端末だけに保存）</div>
 </div>
 
 <!-- ⑦ Doc Detail -->
@@ -803,6 +814,12 @@
 
 <!-- Format FAB -->
 <button class="fmt-fab" id="fmt-fab" style="display:none" onclick="openFmt()">Aa</button>
+<div class="pdf-bar" id="pdf-bar">
+  <button onclick="pdfZoomBy(-1)" aria-label="縮小">－</button>
+  <span id="pdf-zoom-val">100%</span>
+  <button onclick="pdfZoomBy(1)" aria-label="拡大">＋</button>
+  <span class="pdf-pg" id="pdf-pg"></span>
+</div>
 
 <!-- Format overlay + panel -->
 <div class="overlay" id="fmt-ov" onclick="closeFmt()"></div>
@@ -1213,6 +1230,7 @@ let idx = 0, round = 1, flipped = false, pendingWords = null;
 /* ── Navigation ── */
 function showScreen(id) {
   if (docEditing && id !== 'doc-view-screen') setDocEditing(false);
+  if (id !== 'doc-view-screen') closePdfView();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
@@ -1283,7 +1301,7 @@ function renderHome() {
   el.innerHTML = items.map(d => {
     if (d.type === 'document') {
       const meta = d.createdAt ? `追加日: ${fmtDate(d.createdAt)}` : '';
-      return `<div class="deck-card" onclick="goDocDetail('${d.id}')"><div class="deck-info"><div class="deck-name">📄 ${esc(d.name)}</div><div class="deck-meta">${meta}</div></div><div style="font-size:20px;color:var(--sub)">›</div></div>`;
+      return `<div class="deck-card" onclick="goDocDetail('${d.id}')"><div class="deck-info"><div class="deck-name">${d.format === 'pdf' ? '📕' : '📄'} ${esc(d.name)}</div><div class="deck-meta">${meta}</div></div><div style="font-size:20px;color:var(--sub)">›</div></div>`;
     }
     const total = d.words.length, ng = d.notMemorizedIndices;
     const ngN = ng != null ? ng.length : null;
@@ -3011,7 +3029,7 @@ function graphBack() {
 
 /* ── Doc Add ── */
 function goDocAdd() {
-  pendingDocHtml = null;
+  pendingDocHtml = null; pendingPdf = null;
   document.getElementById('doc-file-input').value = '';
   document.getElementById('doc-name').value = '';
   document.getElementById('doc-save-btn').disabled = true;
@@ -3054,9 +3072,28 @@ function onDocLoaded(html, file) {
 function loadDocFile(file) {
   const lower = file.name.toLowerCase();
   const isTxt = lower.endsWith('.txt') || file.type === 'text/plain';
-  if (!lower.endsWith('.docx') && !isTxt) { alert('.docx または .txt ファイルを選択してください'); return; }
+  const isPdf = lower.endsWith('.pdf') || file.type === 'application/pdf';
+  if (!lower.endsWith('.docx') && !isTxt && !isPdf) { alert('.docx / .txt / .pdf ファイルを選択してください'); return; }
   const uc = document.getElementById('doc-ul-count');
   uc.textContent = '読み込み中...'; uc.style.display = 'inline-block';
+  pendingPdf = null;
+  if (isPdf) {
+    file.arrayBuffer().then(async buf => {
+      try {
+        await loadPdfJs();
+        const pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+        pendingPdf = { blob: new Blob([buf], { type: 'application/pdf' }), pages: pdf.numPages, size: buf.byteLength };
+        pdf.destroy();
+        onDocLoaded('', file);
+        uc.textContent = `読み込み完了（${pendingPdf.pages}ページ）`;
+      } catch (e) {
+        console.error(e);
+        alert('PDFを読み込めませんでした。ネットにつながっているか、ファイルが壊れていないか確認してください');
+        uc.style.display = 'none';
+      }
+    });
+    return;
+  }
   if (isTxt) {
     const r = new FileReader();
     r.onload = e => {
@@ -3084,7 +3121,18 @@ function createBlankDoc() {
   if (!document.getElementById('doc-name').value.trim()) document.getElementById('doc-name').value = '新しい資料';
   saveDoc(true);
 }
-function saveDoc(startEditing) {
+async function saveDoc(startEditing) {
+  if (pendingPdf) {
+    const name = document.getElementById('doc-name').value.trim() || '名前なしPDF';
+    const id = uid();
+    try { await idbPut('pdf-' + id, pendingPdf.blob); }
+    catch { alert('PDFを保存できませんでした（端末の空き容量が足りない可能性があります）'); return; }
+    const doc = { id, name, type: 'document', format: 'pdf', pages: pendingPdf.pages, size: pendingPdf.size, createdAt: new Date().toISOString() };
+    const all = loadDecks(); all.push(doc); saveDecks(all);
+    currentDocId = id; pendingPdf = null; pendingDocHtml = null;
+    goDocDetail(id);
+    return;
+  }
   if (!pendingDocHtml) return;
   const name = document.getElementById('doc-name').value.trim() || '名前なし資料';
   const doc = {
@@ -3111,7 +3159,9 @@ function renderDocDetail() {
   if (!doc) { goHome(); return; }
   document.getElementById('doc-det-name').textContent = doc.name;
   document.getElementById('doc-det-body').innerHTML = `
-    <div class="info-box" style="margin-bottom:16px">📄 資料を開くと文字色・サイズを変更できます</div>
+    <div class="info-box" style="margin-bottom:16px">${doc.format === 'pdf'
+      ? `📕 PDF・${doc.pages || '?'}ページ${doc.size ? '・' + (doc.size >= 1048576 ? (doc.size / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(doc.size / 1024)) + 'KB') : ''}<br>PDFはこの端末だけに保存されています（ほかの端末には同期されません）`
+      : '📄 資料を開くと文字色・サイズを変更できます'}</div>
     <div class="study-btns">
       <button class="stbtn stbtn-all" onclick="openDoc('${doc.id}')">資料を開く</button>
     </div>
@@ -3128,6 +3178,7 @@ function editDocName() {
 function delDoc() {
   const doc = loadDecks().find(d => d.id === currentDocId);
   if (!doc || !confirm(`「${doc.name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  if (doc.format === 'pdf') idbDel('pdf-' + doc.id).catch(() => {});
   saveDecks(loadDecks().filter(d => d.id !== currentDocId));
   goHome();
 }
@@ -3135,10 +3186,15 @@ function delDoc() {
 /* ── Doc View ── */
 function openDoc(id) {
   setDocEditing(false);
+  closePdfView();
   currentDocId = id;
   const doc = loadDecks().find(d => d.id === id);
   if (!doc) return;
   document.getElementById('doc-view-title').textContent = doc.name;
+  const content = document.getElementById('doc-content');
+  content.classList.toggle('pdf-mode', doc.format === 'pdf');
+  document.getElementById('doc-edit-btn').style.display = doc.format === 'pdf' ? 'none' : '';
+  if (doc.format === 'pdf') { openPdfView(doc); return; }
   document.getElementById('doc-content').innerHTML = doc.htmlContent || '<p>内容がありません</p>';
   applyDocSettings(doc.settings || {});
   renderFmtPanel(doc.settings || {});
@@ -3190,6 +3246,142 @@ function openFmt() {
 function closeFmt() {
   document.getElementById('fmt-ov').classList.remove('open');
   document.getElementById('fmt-panel').classList.remove('open');
+}
+
+/* ── PDF ── */
+// PDFは大きいので端末内のIndexedDBに保存し、表示はPDF.jsでページごとに描く
+var pendingPdf = null;
+const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let _pdfjsP = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  if (!_pdfjsP) _pdfjsP = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = PDFJS_URL;
+    sc.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; res(); };
+    sc.onerror = () => { _pdfjsP = null; rej(new Error('pdf.js load failed')); };
+    document.head.appendChild(sc);
+  });
+  return _pdfjsP;
+}
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('tc-files', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('files');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function idbReq(mode, fn) {
+  const d = await idbOpen();
+  return new Promise((res, rej) => {
+    const t = d.transaction('files', mode), r = fn(t.objectStore('files'));
+    t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error);
+  });
+}
+const idbPut = (k, v) => idbReq('readwrite', st => st.put(v, k));
+const idbGet = k => idbReq('readonly', st => st.get(k));
+const idbDel = k => idbReq('readwrite', st => st.delete(k));
+
+var pdfView = null; // { pdf, pages:[{el,vp,rendered}], zoom, io }
+const PDF_ZOOMS = [1, 1.25, 1.5, 2, 3];
+async function openPdfView(doc) {
+  const el = document.getElementById('doc-content');
+  el.innerHTML = '<div class="pdf-msg">PDFを読み込み中...</div>';
+  showScreen('doc-view-screen');
+  document.getElementById('doc-view-screen').classList.add('pdf-wide');
+  document.getElementById('fmt-fab').style.display = 'none';
+  const myId = doc.id;
+  let blob = null;
+  try { blob = await idbGet('pdf-' + doc.id); } catch {}
+  if (currentDocId !== myId) return;
+  if (!blob) { el.innerHTML = '<div class="pdf-msg">このPDFはこの端末にありません。<br>ほかの端末で追加したPDFは同期されないので、<br>この端末でもう一度追加してください。</div>'; return; }
+  let pdf;
+  try {
+    await loadPdfJs();
+    pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  } catch (e) {
+    console.error(e);
+    el.innerHTML = '<div class="pdf-msg">PDFを表示できませんでした。<br>はじめて開くときはネットへの接続が必要です。</div>'; return;
+  }
+  if (currentDocId !== myId) { pdf.destroy(); return; }
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const pg = await pdf.getPage(i);
+    pages.push({ pg, vp: pg.getViewport({ scale: 1 }), rendered: 0 });
+  }
+  el.innerHTML = '<div class="pdf-pages" id="pdf-pages"></div>';
+  const wrap = document.getElementById('pdf-pages');
+  pages.forEach((p, i) => { p.el = document.createElement('div'); p.el.className = 'pdf-page'; p.el.dataset.i = i; wrap.appendChild(p.el); });
+  pdfView = { pdf, pages, zoom: 1, io: null };
+  // 画面に近づいたページだけ描く
+  pdfView.io = new IntersectionObserver(ents => ents.forEach(en => {
+    if (en.isIntersecting) renderPdfPage(pages[+en.target.dataset.i]);
+  }), { rootMargin: '600px 0px' });
+  pages.forEach(p => pdfView.io.observe(p.el));
+  layoutPdf();
+  document.getElementById('pdf-bar').classList.add('open');
+  updatePdfPageNum();
+}
+function pdfBaseWidth() {
+  const el = document.getElementById('doc-content');
+  return Math.max(200, el.clientWidth - 16);
+}
+function layoutPdf() {
+  if (!pdfView) return;
+  const w = pdfBaseWidth() * pdfView.zoom;
+  pdfView.pages.forEach(p => {
+    p.el.style.width = w + 'px';
+    p.el.style.height = (w * p.vp.height / p.vp.width) + 'px';
+  });
+  document.getElementById('pdf-zoom-val').textContent = Math.round(pdfView.zoom * 100) + '%';
+}
+async function renderPdfPage(p) {
+  if (!pdfView) return;
+  const w = pdfBaseWidth() * pdfView.zoom, key = Math.round(w);
+  if (p.rendered === key) return;
+  p.rendered = key;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const vp = p.pg.getViewport({ scale: w / p.vp.width * dpr });
+  const cv = document.createElement('canvas');
+  cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  try {
+    await p.pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    if (p.rendered === key) { p.el.innerHTML = ''; p.el.appendChild(cv); }
+  } catch { p.rendered = 0; }
+}
+function pdfZoomBy(dir) {
+  if (!pdfView) return;
+  const i = PDF_ZOOMS.indexOf(pdfView.zoom), ni = Math.max(0, Math.min(PDF_ZOOMS.length - 1, i + dir));
+  if (ni === i) return;
+  const sc = window.scrollY / Math.max(1, document.body.scrollHeight);
+  pdfView.zoom = PDF_ZOOMS[ni];
+  layoutPdf();
+  window.scrollTo(0, sc * document.body.scrollHeight);
+  // 見えているページを描き直す
+  pdfView.pages.forEach(p => { const r = p.el.getBoundingClientRect(); if (r.bottom > -600 && r.top < innerHeight + 600) renderPdfPage(p); });
+}
+function updatePdfPageNum() {
+  if (!pdfView) return;
+  const mid = innerHeight / 2;
+  let cur = 1;
+  pdfView.pages.forEach((p, i) => { if (p.el.getBoundingClientRect().top < mid) cur = i + 1; });
+  document.getElementById('pdf-pg').textContent = `${cur} / ${pdfView.pages.length}`;
+}
+window.addEventListener('scroll', () => { if (pdfView) updatePdfPageNum(); }, { passive: true });
+window.addEventListener('resize', () => {
+  if (!pdfView) return;
+  layoutPdf();
+  pdfView.pages.forEach(p => { const r = p.el.getBoundingClientRect(); if (r.bottom > -600 && r.top < innerHeight + 600) renderPdfPage(p); });
+});
+function closePdfView() {
+  const bar = document.getElementById('pdf-bar');
+  if (bar) bar.classList.remove('open');
+  document.getElementById('doc-view-screen')?.classList.remove('pdf-wide');
+  if (!pdfView) return;
+  try { pdfView.io.disconnect(); } catch {}
+  try { pdfView.pdf.destroy(); } catch {}
+  pdfView = null;
 }
 
 /* ── 編集モード ── */
