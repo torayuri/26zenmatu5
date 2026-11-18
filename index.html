@@ -595,9 +595,13 @@
         <span class="pomo-set-label">集中</span>
         <div id="pomo-work-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       </div>
-      <div class="pomo-set-row" style="margin-bottom:16px">
+      <div class="pomo-set-row">
         <span class="pomo-set-label">休憩</span>
         <div id="pomo-break-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="pomo-set-row" style="margin-bottom:16px;align-items:flex-start">
+        <span class="pomo-set-label" style="padding-top:7px">終了音</span>
+        <div id="pomo-sound-chips" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
       </div>
       <div class="timer-btns">
         <button class="timer-btn-start" id="pomo-start-btn" onclick="pomoToggle()">▶ 集中スタート</button>
@@ -1941,9 +1945,20 @@ function finishTimer() {
 const POMO_KEY = 'tc-pomo';
 const POMO_WORK_OPTS = [15, 25, 45, 50];
 const POMO_BREAK_OPTS = [5, 10, 15];
+// 終了音（すべてその場で合成するので音声ファイルは不要）
+// notes: [開始秒, 周波数Hz, 長さ秒, 波形]
+const POMO_SOUNDS = [
+  { id: 'beep',    name: 'ピピピ',       notes: [[0,880,.25,'sine'],[.35,880,.25,'sine'],[.7,880,.25,'sine']] },
+  { id: 'chime',   name: 'チャイム',     notes: [[0,659,.9,'sine'],[.45,523,.9,'sine'],[.9,587,.9,'sine'],[1.35,392,1.4,'sine']] },
+  { id: 'bell',    name: 'ベル',         notes: [[0,1046,1.6,'triangle'],[0,2093,1.0,'sine'],[.8,1046,1.6,'triangle'],[.8,2093,1.0,'sine']] },
+  { id: 'marimba', name: '木琴',         notes: [[0,523,.3,'sine'],[.15,659,.3,'sine'],[.3,784,.3,'sine'],[.45,1046,.5,'sine']] },
+  { id: 'fanfare', name: 'ファンファーレ', notes: [[0,523,.18,'square'],[.2,523,.18,'square'],[.4,523,.18,'square'],[.6,659,.5,'square'],[1.15,784,.7,'square']] },
+  { id: 'alarm',   name: '目覚まし',     notes: Array.from({length:12}, (_, i) => [i*.12, i%2 ? 1200 : 1500, .1, 'square']) },
+  { id: 'none',    name: '音なし',       notes: [] },
+];
 var timerMode = (() => { try { return localStorage.getItem('tc-timer-mode') || 'sw'; } catch { return 'sw'; } })();
 let pomo = (() => {
-  const d = { work: 25, brk: 5, phase: 'work', running: false, endTs: null, remain: 25 * 60, count: 0, countDate: '' };
+  const d = { work: 25, brk: 5, sound: 'beep', phase: 'work', running: false, endTs: null, remain: 25 * 60, count: 0, countDate: '' };
   try { return Object.assign(d, JSON.parse(localStorage.getItem(POMO_KEY)) || {}); } catch { return d; }
 })();
 let pomoInterval = null;
@@ -1989,12 +2004,42 @@ function pomoRender() {
     `<button class="pomo-chip ${m === pomo.work ? 'active' : ''}" onclick="pomoSetLen('work',${m})" ${fresh ? '' : 'disabled'}>${m}分</button>`).join('');
   $('pomo-break-chips').innerHTML = POMO_BREAK_OPTS.map(m =>
     `<button class="pomo-chip ${m === pomo.brk ? 'active' : ''}" onclick="pomoSetLen('brk',${m})" ${fresh ? '' : 'disabled'}>${m}分</button>`).join('');
+  $('pomo-sound-chips').innerHTML = POMO_SOUNDS.map(snd =>
+    `<button class="pomo-chip ${snd.id === pomo.sound ? 'active' : ''}" onclick="pomoSetSound('${snd.id}')">${snd.name}</button>`).join('');
   document.getElementById('timer-screen').classList.toggle('timer-running', pomo.running && !isBreak);
   if (timerMode === 'pomo') {
     const fsEl = $('timer-fs-digits'), fsPh = $('timer-fs-phase');
     if (fsEl) { fsEl.textContent = str; fsEl.style.color = isBreak ? '#6ee7b7' : (timerColor || '#fff'); }
     if (fsPh) fsPh.textContent = label;
   }
+}
+
+function pomoSetSound(id) {
+  pomo.sound = id;
+  pomoSave(); pomoRender();
+  playPomoSound(id); // 試し聞き
+}
+function playPomoSound(id) {
+  const snd = POMO_SOUNDS.find(x => x.id === id) || POMO_SOUNDS[0];
+  if (!snd.notes.length) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC(), t0 = ctx.currentTime + 0.05;
+    let end = 0;
+    snd.notes.forEach(([t, f, d, type]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = f;
+      const vol = type === 'square' ? 0.12 : 0.3;
+      g.gain.setValueAtTime(0.0001, t0 + t);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + d);
+      o.connect(g).connect(ctx.destination);
+      o.start(t0 + t); o.stop(t0 + t + d + 0.02);
+      end = Math.max(end, t + d);
+    });
+    setTimeout(() => ctx.close(), (end + 0.5) * 1000);
+  } catch {}
 }
 
 function pomoSetLen(kind, m) {
@@ -2064,23 +2109,11 @@ function pomoReset() {
 
 function pomoNotify(msg) {
   try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch {}
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) {
-      const ctx = new AC();
-      [0, 0.35, 0.7].forEach(t => {
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
-        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.3);
-        o.connect(g).connect(ctx.destination);
-        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.32);
-      });
-      setTimeout(() => ctx.close(), 1500);
-    }
-  } catch {}
-  setTimeout(() => alert(msg), 50);
+  playPomoSound(pomo.sound);
+  // 音が鳴り終わってからお知らせを出す（alertが出ている間は音が止まる端末があるため）
+  const snd = POMO_SOUNDS.find(x => x.id === pomo.sound);
+  const dur = snd && snd.notes.length ? Math.max(...snd.notes.map(n => n[0] + n[2])) * 1000 : 0;
+  setTimeout(() => alert(msg), dur + 100);
 }
 
 // 起動時・アプリに戻ったとき：時間が過ぎていたら終了処理
