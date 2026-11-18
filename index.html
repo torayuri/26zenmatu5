@@ -1093,8 +1093,10 @@ async function doRegister() {
 async function doLogout() {
   if (!confirm('ログアウトしますか？\nデッキのデータはクラウドに保存されています。')) return;
   await auth.signOut();
-  deckCache = [];
+  deckCache = []; snapDecks([]);
   localStorage.removeItem(KEY);
+  localStorage.removeItem(DELETED_KEY);
+  localStorage.removeItem(DOC_UP_KEY);
   currentUser = null;
   renderUserArea();
   renderHome();
@@ -1111,14 +1113,17 @@ async function loadCloudData(user) {
   const ref = db.collection('users').doc(user.uid);
 
   /* ── Decks ── */
-  const localDecks = loadLocalDecks();
-  if (cloud?.decks?.length > 0) {
-    deckCache = cloud.decks;
-    localStorage.setItem(KEY, JSON.stringify(cloud.decks));
-  } else if (localDecks.length > 0) {
-    deckCache = localDecks;
-    ref.set({ decks: localDecks }, { merge: true }).catch(()=>{});
-  } else { deckCache = []; }
+  // 端末とクラウドを「上書き」ではなく「合体」させる（新しい方を残し、削除した物は消す）
+  const localDecks = await stripDocContents(loadDecks());
+  const deleted = { ...(cloud?.deletedDecks || {}), ...loadDeletedIds() };
+  const merged = mergeDecks(localDecks, await stripDocContents(cloud?.decks || []), deleted);
+  deckCache = merged;
+  snapDecks(merged);
+  saveDeletedIds(deleted);
+  try { localStorage.setItem(KEY, JSON.stringify(merged)); } catch {}
+  try { await ref.set({ decks: merged, deletedDecks: deleted }, { merge: true }); }
+  catch (e) { console.error('Firestore decks save error:', e); }
+  syncDocContents(merged).catch(e => console.error('doc content sync error:', e));
 
   /* ── Stamps ── */
   if (cloud?.stamps && Object.keys(cloud.stamps).length > 0) {
@@ -1200,13 +1205,143 @@ const KEY = 'tc-decks';
 let deckCache = null;
 
 function loadLocalDecks() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
-function loadDecks() { return deckCache !== null ? deckCache : loadLocalDecks(); }
+function loadDecks() {
+  if (deckCache === null) { deckCache = loadLocalDecks(); snapDecks(deckCache); }
+  return deckCache;
+}
+// 各デッキ・資料の「最後に変更した時刻」を自動でつける（同期で新しい方を選ぶため）
+let _deckSnap = {};
+function deckJson(x) { const { updatedAt, ...rest } = x; return JSON.stringify(rest); }
+function snapDecks(list) { _deckSnap = {}; list.forEach(x => _deckSnap[x.id] = deckJson(x)); }
+const DELETED_KEY = 'tc-deleted-decks';
+function loadDeletedIds() { try { return JSON.parse(localStorage.getItem(DELETED_KEY) || '{}'); } catch { return {}; } }
+function saveDeletedIds(m) {
+  // 60日より前の削除記録は捨てる
+  const lim = Date.now() - 60 * 86400000;
+  Object.keys(m).forEach(k => { if (m[k] < lim) delete m[k]; });
+  try { localStorage.setItem(DELETED_KEY, JSON.stringify(m)); } catch {}
+}
+function mergeDecks(a, b, deleted) {
+  const map = new Map();
+  [...a, ...b].forEach(x => {
+    if (!x || !x.id) return;
+    const cur = map.get(x.id);
+    if (!cur || (x.updatedAt || 0) > (cur.updatedAt || 0)) map.set(x.id, x);
+  });
+  const order = [...a.map(x => x.id), ...b.map(x => x.id)];
+  return [...new Set(order)].map(id => map.get(id))
+    .filter(x => x && !(deleted[x.id] && deleted[x.id] >= (x.updatedAt || 0)));
+}
 async function saveDecks(d) {
+  const now = Date.now(), prevIds = new Set(Object.keys(_deckSnap));
+  d.forEach(x => { const j = deckJson(x); if (_deckSnap[x.id] !== j) { x.updatedAt = now; } prevIds.delete(x.id); });
+  // 消えたものは削除記録に残す（同期で復活しないように）
+  if (prevIds.size) { const del = loadDeletedIds(); prevIds.forEach(id => del[id] = now); saveDeletedIds(del); }
   deckCache = d;
-  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch {}
+  snapDecks(d);
+  let ok = true;
+  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { ok = false; console.error('local save error:', e); }
+  if (!ok) alert('端末の保存容量がいっぱいで保存できませんでした。いらない資料やデッキを削除してください');
   if (db && currentUser) {
-    try { await db.collection('users').doc(currentUser.uid).set({ decks: d }, { merge: true }); }
-    catch(e) { console.error('Firestore save error:', e); }
+    try { await db.collection('users').doc(currentUser.uid).set({ decks: d, deletedDecks: loadDeletedIds() }, { merge: true }); }
+    catch(e) { console.error('Firestore save error:', e); showSyncWarn(); }
+  }
+}
+function showSyncWarn(msg) {
+  const now = Date.now();
+  if (showSyncWarn._t && now - showSyncWarn._t < 60000) return; // 連続で出さない
+  showSyncWarn._t = now;
+  alert(msg || 'クラウドへの保存に失敗しました。この端末には保存されています。\nネットにつながったら「同期」を押してください');
+}
+
+/* ── 資料の本文（大きいので別に保存） ──
+   端末：IndexedDB の 'doc-<id>'
+   クラウド：users/<uid>/docs/<id>（大きい時は <id>~1, <id>~2 … に分割） */
+const DOC_CHUNK = 250000; // 1つのFirestore文書(1MB)に確実に収まる文字数
+const DOC_UP_KEY = 'tc-doc-uploaded';
+function loadDocUploaded() { try { return JSON.parse(localStorage.getItem(DOC_UP_KEY) || '{}'); } catch { return {}; } }
+function saveDocUploaded(m) { try { localStorage.setItem(DOC_UP_KEY, JSON.stringify(m)); } catch {} }
+// 古い形式（一覧の中に本文が入っている）を本文だけ取り出して端末に移す
+async function stripDocContents(list) {
+  for (const x of list) {
+    if (x && x.type === 'document' && typeof x.htmlContent === 'string') {
+      const has = await idbGet('doc-' + x.id).catch(() => null);
+      if (!has) await idbPut('doc-' + x.id, x.htmlContent).catch(() => {});
+      x.contentRev = x.contentRev || Date.now();
+      delete x.htmlContent;
+    }
+  }
+  return list;
+}
+async function getDocHtml(id) {
+  let html = await idbGet('doc-' + id).catch(() => null);
+  if (html == null && db && currentUser) {
+    html = await downloadDocHtml(id).catch(e => { console.error(e); return null; });
+    if (html != null) await idbPut('doc-' + id, html).catch(() => {});
+  }
+  return html;
+}
+let _docUpTimers = {};
+async function setDocHtml(id, html, immediate) {
+  await idbPut('doc-' + id, html);
+  const all = loadDecks(), doc = all.find(d => d.id === id);
+  if (doc) { doc.contentRev = Date.now(); saveDecks(all); }
+  clearTimeout(_docUpTimers[id]);
+  const up = () => uploadDocHtml(id).catch(e => { console.error('doc upload error:', e); showSyncWarn(docSyncErrMsg(e)); });
+  if (immediate) await up(); else _docUpTimers[id] = setTimeout(up, 3000);
+}
+function docSyncErrMsg(e) {
+  return e && e.code === 'permission-denied'
+    ? '資料の本文をクラウドに保存できませんでした（Firebaseのルールで許可されていません）。この端末には保存されています'
+    : null;
+}
+function docsCol() { return db.collection('users').doc(currentUser.uid).collection('docs'); }
+async function uploadDocHtml(id) {
+  if (!db || !currentUser) return;
+  const doc = loadDecks().find(d => d.id === id);
+  const html = await idbGet('doc-' + id);
+  if (!doc || html == null) return;
+  const rev = doc.contentRev || Date.now(), n = Math.max(1, Math.ceil(html.length / DOC_CHUNK)), col = docsCol();
+  for (let i = 1; i < n; i++) await col.doc(id + '~' + i).set({ p: html.slice(i * DOC_CHUNK, (i + 1) * DOC_CHUNK), rev });
+  await col.doc(id).set({ n, rev, p: html.slice(0, DOC_CHUNK) });
+  const upd = loadDocUploaded(); upd[id] = rev; saveDocUploaded(upd);
+}
+async function downloadDocHtml(id) {
+  const col = docsCol(), main = await col.doc(id).get();
+  if (!main.exists) return null;
+  const { n, p } = main.data();
+  let html = p || '';
+  for (let i = 1; i < (n || 1); i++) { const c = await col.doc(id + '~' + i).get(); html += c.exists ? c.data().p : ''; }
+  const upd = loadDocUploaded(); upd[id] = main.data().rev; saveDocUploaded(upd);
+  return html;
+}
+async function deleteDocHtml(id) {
+  await idbDel('doc-' + id).catch(() => {});
+  if (!db || !currentUser) return;
+  try {
+    const col = docsCol(), main = await col.doc(id).get();
+    const n = main.exists ? (main.data().n || 1) : 1;
+    for (let i = 1; i < n; i++) await col.doc(id + '~' + i).delete();
+    await col.doc(id).delete();
+  } catch (e) { console.error('doc delete error:', e); }
+}
+// 同期のとき：まだクラウドに上がっていない本文をアップ、クラウドの方が新しい本文はダウンロード
+async function syncDocContents(list) {
+  if (!db || !currentUser) return;
+  const upd = loadDocUploaded();
+  let warned = false;
+  for (const d of list) {
+    if (d.type !== 'document' || d.format === 'pdf') continue;
+    const local = await idbGet('doc-' + d.id).catch(() => null);
+    try {
+      if (local != null && upd[d.id] !== d.contentRev) {
+        const main = await docsCol().doc(d.id).get();
+        if (!main.exists || (main.data().rev || 0) < (d.contentRev || 0)) await uploadDocHtml(d.id);
+        else { const h = await downloadDocHtml(d.id); if (h != null) await idbPut('doc-' + d.id, h); }
+      } else if (local == null) {
+        const h = await downloadDocHtml(d.id); if (h != null) await idbPut('doc-' + d.id, h);
+      }
+    } catch (e) { console.error('doc sync error:', e); if (!warned) { warned = true; showSyncWarn(docSyncErrMsg(e) || '資料の本文の同期に失敗しました。この端末には保存されています'); } }
   }
 }
 
@@ -3060,6 +3195,24 @@ function decodeText(buf) {
   try { return new TextDecoder('shift_jis').decode(bytes); } catch {}
   return new TextDecoder('utf-8').decode(bytes);
 }
+function shrinkImage(src, max = 1200) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      const sc = Math.min(1, max / Math.max(im.width, im.height));
+      if (sc === 1 && src.length < 300000) return res(src);
+      const c = document.createElement('canvas');
+      c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); // 透明部分は白に
+      ctx.drawImage(im, 0, 0, c.width, c.height);
+      const out = c.toDataURL('image/jpeg', .8);
+      res(out.length < src.length ? out : src);
+    };
+    im.onerror = () => res(src);
+    im.src = src;
+  });
+}
 function onDocLoaded(html, file) {
   pendingDocHtml = html;
   const ni = document.getElementById('doc-name');
@@ -3108,7 +3261,10 @@ function loadDocFile(file) {
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      const result = await mammoth.convertToHtml({ arrayBuffer: e.target.result });
+      // 画像は大きすぎると保存・同期できないので、縮小して軽くする
+      const result = await mammoth.convertToHtml({ arrayBuffer: e.target.result }, {
+        convertImage: mammoth.images.imgElement(img => img.read('base64').then(b64 => shrinkImage(`data:${img.contentType};base64,${b64}`)).then(src => ({ src })))
+      });
       if (!result.value) { alert('内容が読み込めませんでした'); uc.style.display='none'; return; }
       onDocLoaded(result.value, file);
     } catch { alert('ファイルの読み込みに失敗しました'); uc.style.display='none'; }
@@ -3136,12 +3292,14 @@ async function saveDoc(startEditing) {
   if (!pendingDocHtml) return;
   const name = document.getElementById('doc-name').value.trim() || '名前なし資料';
   const doc = {
-    id: uid(), name, type: 'document',
-    htmlContent: pendingDocHtml,
+    id: uid(), name, type: 'document', contentRev: Date.now(),
     settings: { textColor: '#1a202c', bgColor: '#ffffff', fontSize: 16 },
     createdAt: new Date().toISOString()
   };
-  const all = loadDecks(); all.push(doc); saveDecks(all);
+  try { await idbPut('doc-' + doc.id, pendingDocHtml); }
+  catch { alert('資料を保存できませんでした（端末の空き容量が足りない可能性があります）'); return; }
+  const all = loadDecks(); all.push(doc); await saveDecks(all);
+  uploadDocHtml(doc.id).catch(e => { console.error('doc upload error:', e); showSyncWarn(docSyncErrMsg(e)); });
   currentDocId = doc.id; pendingDocHtml = null;
   if (startEditing === true) { goDocDetail(doc.id); openDoc(doc.id); toggleDocEdit(true); }
   else goDocDetail(doc.id);
@@ -3179,6 +3337,7 @@ function delDoc() {
   const doc = loadDecks().find(d => d.id === currentDocId);
   if (!doc || !confirm(`「${doc.name}」を削除しますか？\nこの操作は取り消せません。`)) return;
   if (doc.format === 'pdf') idbDel('pdf-' + doc.id).catch(() => {});
+  else deleteDocHtml(doc.id);
   saveDecks(loadDecks().filter(d => d.id !== currentDocId));
   goHome();
 }
@@ -3195,10 +3354,15 @@ function openDoc(id) {
   content.classList.toggle('pdf-mode', doc.format === 'pdf');
   document.getElementById('doc-edit-btn').style.display = doc.format === 'pdf' ? 'none' : '';
   if (doc.format === 'pdf') { openPdfView(doc); return; }
-  document.getElementById('doc-content').innerHTML = doc.htmlContent || '<p>内容がありません</p>';
+  content.innerHTML = '<p style="color:var(--sub)">読み込み中...</p>';
   applyDocSettings(doc.settings || {});
   renderFmtPanel(doc.settings || {});
   showScreen('doc-view-screen');
+  (typeof doc.htmlContent === 'string' ? Promise.resolve(doc.htmlContent) : getDocHtml(id)).then(html => {
+    if (currentDocId !== id) return;
+    content.innerHTML = html != null ? (html || '<p><br></p>')
+      : '<p>本文が見つかりませんでした。ログインしている場合は「同期」を押してから開き直してください。</p>';
+  });
 }
 
 function applyDocSettings(s) {
@@ -3606,8 +3770,7 @@ function mergeAdjacentMarkers() {
 function saveDocContent() {
   const all = loadDecks(), doc = all.find(d => d.id === currentDocId);
   if (!doc) return;
-  doc.htmlContent = document.getElementById('doc-content').innerHTML;
-  saveDecks(all);
+  setDocHtml(doc.id, document.getElementById('doc-content').innerHTML).catch(e => console.error(e));
 }
 
 /* ── 最終更新日 ── */
@@ -3630,6 +3793,14 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Init ── */
+// 古い形式で保存されている資料の本文を、容量の大きい保存場所(IndexedDB)へ移す
+(async () => {
+  const list = loadDecks();
+  if (!list.some(x => x.type === 'document' && typeof x.htmlContent === 'string')) return;
+  await stripDocContents(list);
+  snapDecks(list);
+  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch {}
+})();
 pomoCatchUp();
 renderUserArea();
 renderHome();
