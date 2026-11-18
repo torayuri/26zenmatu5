@@ -271,6 +271,16 @@
     .cal-day.sun{color:#ef4444;} .cal-day.sat{color:#3b82f6;}
     .cal-day.dim{color:var(--sub);font-weight:normal;}
     .stamp-img{width:82%;height:82%;object-fit:contain;}
+    .cal-cell.lv1{background:rgba(34,197,94,.16);} .cal-cell.lv2{background:rgba(34,197,94,.32);}
+    .cal-cell.lv3{background:rgba(34,197,94,.5);}  .cal-cell.lv4{background:rgba(34,197,94,.72);}
+    .cal-cell.lv4 .cal-day,.cal-cell.lv3 .cal-day{color:#0b3d1e;}
+    .cal-cell.sel{outline:2px solid var(--title);outline-offset:-2px;}
+    .cal-cell{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+    .heat-legend{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--sub);margin-top:10px;}
+    .heat-legend i{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid var(--border);}
+    .heat-info{font-size:13px;color:var(--title);margin-top:8px;min-height:18px;line-height:1.6;}
+    .heat-info .sub{color:var(--sub);font-size:12px;}
+    .heat-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--sub);font-weight:bold;}
     .cal-day-small{position:absolute;bottom:1px;right:3px;font-size:8px;color:var(--sub);line-height:1;}
     .stamp-press-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--p1),var(--p2));color:white;border:none;border-radius:16px;font-size:17px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s,opacity .15s;}
     .stamp-press-btn:active{transform:scale(.97);}
@@ -355,6 +365,9 @@
     .pomo-chip:disabled{opacity:.5;cursor:not-allowed;}
     .pomo-sub-btns{display:flex;gap:10px;}
     .pomo-sub-btns .timer-btn-stop{flex:1;}
+    .bgm-row{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);text-align:left;}
+    .bgm-vol{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:14px;}
+    .bgm-vol input{flex:1;accent-color:var(--p1);}
     .timer-fs-phase{font-size:16px;font-weight:bold;color:rgba(255,255,255,.7);margin-bottom:10px;min-height:20px;}
     .study-log-section{width:100%;}
     .study-log-title{font-size:16px;font-weight:bold;color:var(--title);margin-bottom:12px;}
@@ -558,6 +571,14 @@
   </div>
   <div class="cal-wrap">
     <div class="cal-grid" id="stamp-cal"></div>
+    <div class="heat-toggle">
+      <span>勉強時間を色で表示</span>
+      <button class="toggle-sw" id="heat-toggle-btn" onclick="toggleHeat()"></button>
+    </div>
+    <div id="heat-extra">
+      <div class="heat-legend">少 <i style="background:transparent"></i><i style="background:rgba(34,197,94,.16)"></i><i style="background:rgba(34,197,94,.32)"></i><i style="background:rgba(34,197,94,.5)"></i><i style="background:rgba(34,197,94,.72)"></i> 多</div>
+      <div class="heat-info" id="heat-info"></div>
+    </div>
   </div>
   <button class="stamp-press-btn" id="stamp-press-btn" onclick="pressStamp()">今日のスタンプを押す！</button>
 </div>
@@ -611,6 +632,14 @@
         </div>
       </div>
       <div class="timer-fs-hint-small" style="margin:12px 0 0">集中が終わるたびに学習履歴へ自動で記録されます</div>
+    </div>
+    <div class="bgm-row">
+      <div class="pomo-set-row" style="align-items:flex-start;margin-bottom:4px">
+        <span class="pomo-set-label" style="padding-top:7px">BGM</span>
+        <div id="bgm-chips" style="display:flex;gap:6px;flex-wrap:wrap;flex:1"></div>
+      </div>
+      <div class="bgm-vol"><span>🔈</span><input type="range" id="bgm-vol" min="0" max="100" oninput="setBgmVol(this.value)"><span>🔊</span></div>
+      <div class="timer-fs-hint-small" style="margin:8px 0 0;text-align:left">タイマーが動いている間に流れます（ポモドーロは集中中だけ）。押すと少し試し聞きできます</div>
     </div>
   </div>
   <button class="manual-open-btn" onclick="toggleManualAdd()">＋ 手動で学習時間を記録</button>
@@ -1630,14 +1659,61 @@ function toDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padS
 
 function goStamp() {
   const now = new Date(); stampYear = now.getFullYear(); stampMonth = now.getMonth();
+  heatSelDate = toDateStr(now);
   renderStampCal(); showScreen('stamp-screen');
 }
 function prevMonth() { if (--stampMonth < 0) { stampMonth=11; stampYear--; } renderStampCal(); }
 function nextMonth() { if (++stampMonth > 11) { stampMonth=0; stampYear++; } renderStampCal(); }
 
+/* 勉強時間の草（カレンダーの背景色） */
+let heatSelDate = null;
+function heatOn() { try { return localStorage.getItem('tc-heat') !== 'off'; } catch { return true; } }
+function toggleHeat() {
+  try { localStorage.setItem('tc-heat', heatOn() ? 'off' : 'on'); } catch {}
+  renderStampCal();
+}
+function studyByDate() {
+  const map = {};
+  loadStudyLog().forEach(e => {
+    const m = map[e.date] || (map[e.date] = { total: 0, subj: {} });
+    m.total += e.duration;
+    m.subj[e.subject] = (m.subj[e.subject] || 0) + e.duration;
+  });
+  return map;
+}
+function heatLevel(sec) {
+  if (!sec) return 0;
+  if (sec < 30 * 60) return 1;
+  if (sec < 60 * 60) return 2;
+  if (sec < 120 * 60) return 3;
+  return 4;
+}
+function selectHeatDay(ds) { heatSelDate = ds; renderStampCal(); }
+function renderHeatInfo(byDate) {
+  const el = document.getElementById('heat-info');
+  const prefix = `${stampYear}-${String(stampMonth + 1).padStart(2, '0')}-`;
+  let monthTotal = 0, days = 0;
+  Object.entries(byDate).forEach(([d, v]) => { if (d.startsWith(prefix)) { monthTotal += v.total; days++; } });
+  let html = `<div class="sub">${stampMonth + 1}月の合計：${monthTotal ? fmtDuration(monthTotal) : '0分'}（${days}日勉強）</div>`;
+  if (heatSelDate && heatSelDate.startsWith(prefix)) {
+    const [, mm, dd] = heatSelDate.split('-').map(Number);
+    const v = byDate[heatSelDate];
+    if (v) {
+      const subs = Object.entries(v.subj).sort((a, b) => b[1] - a[1]).map(([k, t]) => `${escapeHtml(k)} ${fmtDuration(t)}`).join('、');
+      html = `<div><b>${mm}/${dd}</b>：${fmtDuration(v.total)}</div><div class="sub">${subs}</div>` + html;
+    } else {
+      html = `<div><b>${mm}/${dd}</b>：記録なし</div>` + html;
+    }
+  }
+  el.innerHTML = html;
+}
+
 function renderStampCal() {
   document.getElementById('stamp-month-label').textContent = `${stampYear}年${stampMonth+1}月`;
   const stamps = loadStamps(), imgs = loadStampImgs();
+  const showHeat = heatOn(), byDate = showHeat ? studyByDate() : {};
+  document.getElementById('heat-toggle-btn').classList.toggle('on', showHeat);
+  document.getElementById('heat-extra').style.display = showHeat ? '' : 'none';
   const today = new Date(), todayStr = toDateStr(today);
   const firstDow = new Date(stampYear, stampMonth, 1).getDay();
   const daysInM  = new Date(stampYear, stampMonth+1, 0).getDate();
@@ -1653,9 +1729,12 @@ function renderStampCal() {
     const inner = idx >= 0 && imgs[idx]
       ? `<img src="${imgs[idx]}" class="stamp-img" alt="stamp"><span class="cal-day-small">${d}</span>`
       : `<span class="cal-day ${dowCls} ${isFuture?'dim':''}">${d}</span>`;
-    html += `<div class="cal-cell ${isToday?'cal-today':''} ${isFuture?'cal-future':''}">${inner}</div>`;
+    const lv = showHeat ? heatLevel(byDate[ds]?.total) : 0;
+    const sel = showHeat && ds === heatSelDate ? 'sel' : '';
+    html += `<div class="cal-cell ${isToday?'cal-today':''} ${isFuture?'cal-future':''} ${lv?'lv'+lv:''} ${sel}" onclick="selectHeatDay('${ds}')">${inner}</div>`;
   }
   document.getElementById('stamp-cal').innerHTML = html;
+  if (showHeat) renderHeatInfo(byDate);
   const isThisMonth = stampYear===today.getFullYear() && stampMonth===today.getMonth();
   const btn = document.getElementById('stamp-press-btn');
   btn.style.display = isThisMonth ? 'block' : 'none';
@@ -1795,6 +1874,7 @@ function selectTimerColor(c) { timerColor = c; renderColorPicker(); }
 
 function renderTimerScreen() {
   setTimerMode(timerMode, true);
+  renderBgm();
   updateTimerDisplay();
   renderColorPicker();
   renderStudyLogList();
@@ -1903,6 +1983,7 @@ function toggleTimer() {
     screen.classList.add('timer-running');
     saveTimerState();
   }
+  bgmSync();
 }
 
 function finishTimer() {
@@ -1910,6 +1991,7 @@ function finishTimer() {
   if (total < 10) { alert('学習時間が短すぎます（10秒以上計測してください）'); return; }
   clearInterval(timerInterval); timerInterval = null;
   timerRunning = false;
+  bgmSync();
 
   const subject = (document.getElementById('timer-subject').value.trim()) || '記録なし';
   const log = loadStudyLog();
@@ -2067,7 +2149,7 @@ function pomoToggle() {
     pomo.endTs = Date.now() + pomo.remain * 1000;
     pomoStartTicking();
   }
-  pomoSave(); pomoRender();
+  pomoSave(); pomoRender(); bgmSync();
 }
 
 // フェーズ終了：集中なら記録して休憩へ、休憩なら次の集中へ（次は自分でスタート）
@@ -2090,7 +2172,7 @@ function pomoPhaseEnd(notify) {
   pomo.phase = wasWork ? 'break' : 'work';
   pomo.running = false; pomo.endTs = null;
   pomo.remain = pomoPhaseLen();
-  pomoSave(); pomoRender();
+  pomoSave(); pomoRender(); bgmSync();
   if (notify) pomoNotify(wasWork ? '集中おつかれさま！休憩しよう ☕' : '休憩おわり！次の集中をはじめよう 🍅');
 }
 
@@ -2099,12 +2181,12 @@ function pomoSkip() {
   clearInterval(pomoInterval); pomoInterval = null;
   pomo.phase = pomo.phase === 'work' ? 'break' : 'work';
   pomo.running = false; pomo.endTs = null; pomo.remain = pomoPhaseLen();
-  pomoSave(); pomoRender();
+  pomoSave(); pomoRender(); bgmSync();
 }
 function pomoReset() {
   clearInterval(pomoInterval); pomoInterval = null;
   pomo.phase = 'work'; pomo.running = false; pomo.endTs = null; pomo.remain = pomoPhaseLen();
-  pomoSave(); pomoRender();
+  pomoSave(); pomoRender(); bgmSync();
 }
 
 function pomoNotify(msg) {
@@ -2122,6 +2204,98 @@ function pomoCatchUp() {
   else if (pomo.running) pomoStartTicking();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { pomoCatchUp(); pomoRender(); } });
+
+/* ── BGM（環境音をその場で合成） ── */
+const BGM_LIST = [
+  { id: 'none',  name: 'なし' },
+  { id: 'rain',  name: '🌧 雨' },
+  { id: 'wave',  name: '🌊 波' },
+  { id: 'fire',  name: '🔥 焚き火' },
+  { id: 'white', name: 'ホワイトノイズ' },
+  { id: 'brown', name: 'ブラウンノイズ' },
+];
+let bgmSet = (() => { try { return Object.assign({ id: 'none', vol: 50 }, JSON.parse(localStorage.getItem('tc-bgm')) || {}); } catch { return { id: 'none', vol: 50 }; } })();
+let bgm = null, bgmPreviewTimer = null;
+function bgmSaveSet() { try { localStorage.setItem('tc-bgm', JSON.stringify(bgmSet)); } catch {} }
+
+function makeNoise(ctx, kind) {
+  const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  let last = 0, b0 = 0, b1 = 0, b2 = 0;
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1;
+    if (kind === 'brown') { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    else if (kind === 'pink') { b0 = 0.99765 * b0 + w * 0.099046; b1 = 0.963 * b1 + w * 0.2965164; b2 = 0.57 * b2 + w * 1.0526913; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.11; }
+    else d[i] = w;
+  }
+  const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+  return src;
+}
+function startBgm(id) {
+  stopBgm();
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC || id === 'none') return;
+  const ctx = new AC(), master = ctx.createGain(), timers = [];
+  master.gain.value = (bgmSet.vol / 100) * 0.6;
+  master.connect(ctx.destination);
+  const chain = (...nodes) => { nodes.reduce((a, b) => (a.connect(b), b)); return nodes[0]; };
+  const filt = (type, f, q) => { const n = ctx.createBiquadFilter(); n.type = type; n.frequency.value = f; if (q) n.Q.value = q; return n; };
+  const gain = v => { const g = ctx.createGain(); g.gain.value = v; return g; };
+  // 短い「パチッ」「ポツッ」を鳴らす
+  const burst = (f, dur, vol) => {
+    const t = ctx.currentTime, src = makeNoise(ctx, 'white'), g = gain(0);
+    chain(src, filt('bandpass', f, 3), g, master);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.start(t, Math.random() * 3); src.stop(t + dur + 0.02);
+  };
+  if (id === 'white') { const s = makeNoise(ctx, 'white'); chain(s, gain(0.25), master); s.start(); }
+  if (id === 'brown') { const s = makeNoise(ctx, 'brown'); chain(s, gain(0.9), master); s.start(); }
+  if (id === 'rain') {
+    const s = makeNoise(ctx, 'pink'); chain(s, filt('highpass', 500), filt('lowpass', 7000), gain(0.9), master); s.start();
+    timers.push(setInterval(() => { if (Math.random() < 0.5) burst(2500 + Math.random() * 3000, 0.03, 0.15 + Math.random() * 0.2); }, 60));
+  }
+  if (id === 'wave') {
+    const s = makeNoise(ctx, 'brown'), g = gain(0.5), lfo = ctx.createOscillator(), depth = gain(0.45);
+    lfo.frequency.value = 0.09; chain(lfo, depth, g.gain);
+    chain(s, filt('lowpass', 900), g, master); s.start(); lfo.start();
+  }
+  if (id === 'fire') {
+    const s = makeNoise(ctx, 'brown'); chain(s, filt('lowpass', 400), gain(0.7), master); s.start();
+    timers.push(setInterval(() => { if (Math.random() < 0.35) burst(1500 + Math.random() * 3500, 0.01 + Math.random() * 0.03, 0.3 + Math.random() * 0.5); }, 70));
+  }
+  bgm = { id, ctx, master, timers };
+}
+function stopBgm() {
+  if (!bgm) return;
+  bgm.timers.forEach(clearInterval);
+  try { bgm.ctx.close(); } catch {}
+  bgm = null;
+}
+function bgmShouldPlay() {
+  return timerRunning || (pomo.running && pomo.phase === 'work');
+}
+function bgmSync() {
+  if (bgmPreviewTimer && !bgmShouldPlay()) return; // 試し聞き中
+  const want = bgmShouldPlay() ? bgmSet.id : 'none';
+  if (want === 'none') { stopBgm(); return; }
+  if (!bgm || bgm.id !== want) startBgm(want);
+}
+function setBgm(id) {
+  bgmSet.id = id; bgmSaveSet(); renderBgm();
+  clearTimeout(bgmPreviewTimer); bgmPreviewTimer = null;
+  if (bgmShouldPlay()) { bgmSync(); return; }
+  if (id === 'none') { stopBgm(); return; }
+  startBgm(id); // タイマーが止まっているときは5秒だけ試し聞き
+  bgmPreviewTimer = setTimeout(() => { bgmPreviewTimer = null; bgmSync(); }, 5000);
+}
+function setBgmVol(v) {
+  bgmSet.vol = +v; bgmSaveSet();
+  if (bgm) bgm.master.gain.value = (bgmSet.vol / 100) * 0.6;
+}
+function renderBgm() {
+  const el = document.getElementById('bgm-chips'); if (!el) return;
+  el.innerHTML = BGM_LIST.map(b => `<button class="pomo-chip ${b.id === bgmSet.id ? 'active' : ''}" onclick="setBgm('${b.id}')">${b.name}</button>`).join('');
+  document.getElementById('bgm-vol').value = bgmSet.vol;
+}
 
 function fmtDuration(sec) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
