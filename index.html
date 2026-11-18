@@ -286,14 +286,13 @@
     .garden-cell{border-radius:10px;background:var(--bg);padding:4px 2px 2px;text-align:center;cursor:pointer;border:2px solid transparent;-webkit-tap-highlight-color:transparent;}
     .garden-cell.sel{border-color:var(--p1);}
     .garden-cell svg{width:100%;height:auto;display:block;}
+    .garden-cell{position:relative;}
+    .garden-badge{position:absolute;top:3px;right:3px;font-size:10px;font-weight:bold;background:#f472b6;color:#fff;border-radius:999px;padding:1px 6px;}
+    .plant-blooms{display:flex;gap:2px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;color:var(--sub);font-weight:bold;}
+    .plant-blooms svg{width:26px !important;height:30px !important;}
     .garden-cell span{font-size:10px;color:var(--sub);}
     .garden-info{font-size:13px;color:var(--title);margin-top:10px;min-height:18px;line-height:1.6;}
     .garden-info .sub{color:var(--sub);font-size:12px;}
-    .plant-pop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:950;display:none;align-items:center;justify-content:center;padding:20px;}
-    .plant-pop.open{display:flex;}
-    .plant-pop-box{background:var(--card-bg);border-radius:24px;padding:24px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3);}
-    .plant-pop-box svg{width:140px;height:168px;}
-    .plant-pop-box .save-btn{margin-top:16px;}
     .cal-day-small{position:absolute;bottom:1px;right:3px;font-size:8px;color:var(--sub);line-height:1;}
     .stamp-press-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--p1),var(--p2));color:white;border:none;border-radius:16px;font-size:17px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s,opacity .15s;}
     .stamp-press-btn:active{transform:scale(.97);}
@@ -790,11 +789,6 @@
   <div class="panel-title">スタンプを選ぼう</div>
   <input type="file" id="stamp-img-input" accept="image/*" style="display:none">
   <div class="stamp-sel-grid" id="stamp-sel-grid"></div>
-</div>
-
-<!-- 今日の植物ポップアップ -->
-<div class="plant-pop" id="plant-pop" onclick="if(event.target===this)closePlantPop()">
-  <div class="plant-pop-box" id="plant-pop-box"></div>
 </div>
 
 <!-- Fullscreen timer overlay -->
@@ -1701,10 +1695,11 @@ const PLANTS = [
 const PLANT_STAGES = [
   { name: '種',     min: 0  },
   { name: '芽',     min: 1  },
-  { name: '若葉',   min: 30 },
-  { name: 'つぼみ', min: 60 },
-  { name: '満開',   min: 90 },
+  { name: '若葉',   min: 40 },
+  { name: 'つぼみ', min: 80 },
+  { name: '満開',   min: 120 },
 ];
+const PLANT_CYCLE_MIN = 120; // 2時間で満開。超えたら新しい芽が出てまた育つ
 function plantForDate(ds) {
   const [y, m, d] = ds.split('-').map(Number);
   const day = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
@@ -1715,6 +1710,16 @@ function plantStage(sec) {
   let st = 0;
   PLANT_STAGES.forEach((s, i) => { if (i && min >= s.min) st = i; });
   return st;
+}
+// 勉強時間 → { 満開になった数, いま育っている株の段階, その株の勉強秒数 }
+function plantGrowth(sec) {
+  const cyc = PLANT_CYCLE_MIN * 60;
+  const full = Math.floor(sec / cyc), rest = sec - full * cyc;
+  return { full, st: plantStage(rest), rest };
+}
+function growthLabel(gr) {
+  if (!gr.full) return PLANT_STAGES[gr.st].name;
+  return `満開×${gr.full}` + (gr.rest > 0 ? `・${PLANT_STAGES[gr.st].name}` : '');
 }
 function studyByDate() {
   const map = {};
@@ -1792,24 +1797,27 @@ function plantSvg(pl, st) {
 <path d="M28 92 h44 l-5 26 h-34 z" fill="#c2703d"/><rect x="25" y="87" width="50" height="8" rx="3" fill="#d9824a"/></svg>`;
 }
 
-function plantNextMsg(sec, st) {
-  if (st >= 4) return '満開！今日もよくがんばったね 🎉';
-  const next = PLANT_STAGES[st + 1], left = Math.max(1, Math.ceil(next.min - sec / 60));
-  return st === 0 ? 'まだ種のまま。勉強すると芽が出るよ' : `あと${left}分勉強すると「${next.name}」に育つよ`;
+function plantNextMsg(gr) {
+  if (gr.st === 0) return gr.full ? '満開になったから、新しい種を植えたよ 🌱' : 'まだ種のまま。勉強すると芽が出るよ';
+  const next = PLANT_STAGES[gr.st + 1], left = Math.max(1, Math.ceil(next.min - gr.rest / 60));
+  return next.name === '満開' ? `あと${left}分で満開！` : `あと${left}分勉強すると「${next.name}」に育つよ`;
 }
-function plantProgress(sec) {
-  return Math.min(100, sec / 60 / PLANT_STAGES[4].min * 100);
+function plantProgress(gr) {
+  return Math.min(100, gr.rest / 60 / PLANT_CYCLE_MIN * 100);
 }
 function renderPlantToday() {
   const ds = toDateStr(new Date()), pl = plantForDate(ds);
-  const sec = studyByDate()[ds]?.total || 0, st = plantStage(sec);
-  document.getElementById('plant-today').innerHTML = `${plantSvg(pl, st)}
+  const sec = studyByDate()[ds]?.total || 0, gr = plantGrowth(sec);
+  const blooms = gr.full
+    ? `<div class="plant-blooms">${Array.from({ length: Math.min(gr.full, 6) }, () => plantSvg(pl, 4)).join('')}${gr.full > 6 ? '…' : ''} 満開 ${gr.full}本</div>` : '';
+  document.getElementById('plant-today').innerHTML = `${plantSvg(pl, gr.st)}
     <div style="flex:1;min-width:0">
-      <div class="plant-title">今日の植物</div>
+      <div class="plant-title">今日の植物${gr.full ? `（${gr.full + 1}本目）` : ''}</div>
       <div class="plant-name">${pl.name}</div>
-      <span class="plant-stage">${PLANT_STAGES[st].name}</span>
-      <div class="plant-bar"><div style="width:${plantProgress(sec)}%"></div></div>
-      <div class="plant-msg">今日 ${sec ? fmtDuration(sec) : '0分'}<br>${plantNextMsg(sec, st)}</div>
+      <span class="plant-stage">${PLANT_STAGES[gr.st].name}</span>
+      <div class="plant-bar"><div style="width:${plantProgress(gr)}%"></div></div>
+      <div class="plant-msg">今日 ${sec ? fmtDuration(sec) : '0分'}<br>${plantNextMsg(gr)}</div>
+      ${blooms}
     </div>`;
 }
 let gardenSel = null;
@@ -1821,39 +1829,24 @@ function renderGarden() {
   for (let d = 1; d <= daysInM; d++) {
     const dt = new Date(stampYear, stampMonth, d), ds = toDateStr(dt);
     if (dt > today && ds !== todayStr) break;
-    const st = plantStage(byDate[ds]?.total || 0);
-    if (st === 4) bloomed++;
-    html += `<div class="garden-cell ${ds === gardenSel ? 'sel' : ''}" onclick="selectGarden('${ds}')">${plantSvg(plantForDate(ds), st)}<span>${d}日</span></div>`;
+    const gr = plantGrowth(byDate[ds]?.total || 0);
+    bloomed += gr.full;
+    // 1本でも満開なら満開の姿、まだなら育ち途中の姿
+    html += `<div class="garden-cell ${ds === gardenSel ? 'sel' : ''}" onclick="selectGarden('${ds}')">${plantSvg(plantForDate(ds), gr.full ? 4 : gr.st)}${gr.full > 1 ? `<b class="garden-badge">×${gr.full}</b>` : ''}<span>${d}日</span></div>`;
   }
   document.getElementById('garden-grid').innerHTML = html || '<div class="garden-sub">まだこの月の植物はありません</div>';
   const info = document.getElementById('garden-info');
-  let txt = `<div class="sub">満開にできた日：${bloomed}日</div>`;
+  let txt = `<div class="sub">今月咲いた花：${bloomed}本</div>`;
   if (gardenSel && gardenSel.startsWith(`${stampYear}-${String(stampMonth + 1).padStart(2, '0')}-`)) {
     const v = byDate[gardenSel], [, mm, dd] = gardenSel.split('-').map(Number);
-    const pl = plantForDate(gardenSel), st = plantStage(v?.total || 0);
+    const pl = plantForDate(gardenSel), gr = plantGrowth(v?.total || 0);
     const subs = v ? Object.entries(v.subj).sort((a, b) => b[1] - a[1]).map(([k, t]) => `${escapeHtml(k)} ${fmtDuration(t)}`).join('、') : '';
-    txt = `<div><b>${mm}/${dd}</b> ${pl.name}（${PLANT_STAGES[st].name}）：${v ? fmtDuration(v.total) : '勉強なし'}</div>${subs ? `<div class="sub">${subs}</div>` : ''}` + txt;
+    txt = `<div><b>${mm}/${dd}</b> ${pl.name}（${growthLabel(gr)}）：${v ? fmtDuration(v.total) : '勉強なし'}</div>${subs ? `<div class="sub">${subs}</div>` : ''}` + txt;
   }
   info.innerHTML = txt;
 }
 function selectGarden(ds) { gardenSel = ds; renderGarden(); }
 
-// その日はじめて開いたときに「今日の植物」をお知らせ
-function showPlantPop(force) {
-  const ds = toDateStr(new Date());
-  let seen = ''; try { seen = localStorage.getItem('tc-plant-seen') || ''; } catch {}
-  if (!force && seen === ds) return;
-  try { localStorage.setItem('tc-plant-seen', ds); } catch {}
-  const pl = plantForDate(ds), sec = studyByDate()[ds]?.total || 0, st = plantStage(sec);
-  document.getElementById('plant-pop-box').innerHTML = `
-    <div class="plant-title">${new Date().getHours() < 11 ? 'おはよう！' : ''}今日の植物は…</div>
-    ${plantSvg(pl, 4)}
-    <div class="plant-name">${pl.name}</div>
-    <div class="plant-msg">${PLANT_STAGES[4].min}分勉強すると、こんなふうに咲くよ！<br>${st ? plantNextMsg(sec, st) : '今はまだ種。さっそく育てよう 🌱'}</div>
-    <button class="save-btn" onclick="closePlantPop()">がんばる！</button>`;
-  document.getElementById('plant-pop').classList.add('open');
-}
-function closePlantPop() { document.getElementById('plant-pop').classList.remove('open'); }
 
 function renderStampCal() {
   document.getElementById('stamp-month-label').textContent = `${stampYear}年${stampMonth+1}月`;
@@ -1946,8 +1939,8 @@ function updateStampHomeSub() {
   const stamps = loadStamps(), now = new Date();
   const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const count = Object.keys(stamps).filter(d => d.startsWith(prefix)).length;
-  const ds = toDateStr(now), st = plantStage(studyByDate()[ds]?.total || 0);
-  el.textContent = `今月 ${count}個${stamps[ds]!=null ? '　今日は押し済み✓' : '　今日はまだ'}　🌱${plantForDate(ds).name}（${PLANT_STAGES[st].name}）`;
+  const ds = toDateStr(now), gr = plantGrowth(studyByDate()[ds]?.total || 0);
+  el.textContent = `今月 ${count}個${stamps[ds]!=null ? '　今日は押し済み✓' : '　今日はまだ'}　🌱${plantForDate(ds).name}（${growthLabel(gr)}）`;
 }
 
 /* ── Study Timer ── */
@@ -3152,7 +3145,6 @@ renderHome();
 loadBgImage();
 updateStampHomeSub();
 updateTimerHomeSub();
-showPlantPop();
 </script>
 </body>
 </html>
