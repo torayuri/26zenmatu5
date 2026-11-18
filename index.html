@@ -289,7 +289,6 @@
     .garden-cell{position:relative;}
     .garden-badge{position:absolute;top:3px;right:3px;font-size:10px;font-weight:bold;background:#f472b6;color:#fff;border-radius:999px;padding:1px 6px;}
     .plant-blooms{display:flex;gap:2px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;color:var(--sub);font-weight:bold;}
-    .plant-blooms svg{width:26px !important;height:30px !important;}
     .garden-cell span{font-size:10px;color:var(--sub);}
     .garden-info{font-size:13px;color:var(--title);margin-top:10px;min-height:18px;line-height:1.6;}
     .garden-info .sub{color:var(--sub);font-size:12px;}
@@ -1732,7 +1731,7 @@ function studyByDate() {
 }
 
 // 植物の絵（SVG）
-function plantSvg(pl, st) {
+function plantGroup(pl, st) {
   const G = '#22c55e', GD = '#15803d', K = '#78350f';
   let g = '';
   const leaf = (x, y, rot, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${7*s}" ry="${3.2*s}" fill="${G}" transform="rotate(${rot} ${x} ${y})"/>`;
@@ -1791,10 +1790,33 @@ function plantSvg(pl, st) {
       }
     }
   }
-  // 植木鉢
-  return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${g}
+  return g;
+}
+const PLANT_MAX_DRAW = 4; // 1つの鉢に描く最大本数
+// stages: 鉢に生えている株の段階のリスト（例 [4,4,2] = 満開2本＋若葉1本）
+function plantsSvg(pl, stages) {
+  const list = stages.slice(0, PLANT_MAX_DRAW), n = list.length;
+  if (n <= 1) {
+    return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${plantGroup(pl, list[0] || 0)}
 <ellipse cx="50" cy="90" rx="24" ry="4" fill="#78350f"/>
 <path d="M28 92 h44 l-5 26 h-34 z" fill="#c2703d"/><rect x="25" y="87" width="50" height="8" rx="3" fill="#d9824a"/></svg>`;
+  }
+  // 横長のプランターに並べて植える
+  const scale = [1, 1, .72, .6, .5][n], gap = [0, 0, 36, 28, 22][n];
+  const g = list.map((st, i) => {
+    const dx = (i - (n - 1) / 2) * gap;
+    return `<g transform="translate(${50 + dx} 90) scale(${scale}) translate(-50 -90)">${plantGroup(pl, st)}</g>`;
+  }).join('');
+  return `<svg viewBox="0 6 100 114" xmlns="http://www.w3.org/2000/svg">${g}
+<ellipse cx="50" cy="90" rx="42" ry="4" fill="#78350f"/>
+<path d="M10 92 h80 l-5 24 h-70 z" fill="#c2703d"/><rect x="6" y="87" width="88" height="8" rx="3" fill="#d9824a"/></svg>`;
+}
+function plantSvg(pl, st) { return plantsSvg(pl, [st]); }
+// 勉強時間から鉢に生えている株のリストを作る
+function growthStages(gr) {
+  const arr = Array(gr.full).fill(4);
+  if (gr.st > 0 || gr.full === 0) arr.push(gr.st);
+  return arr;
 }
 
 function plantNextMsg(gr) {
@@ -1808,9 +1830,8 @@ function plantProgress(gr) {
 function renderPlantToday() {
   const ds = toDateStr(new Date()), pl = plantForDate(ds);
   const sec = studyByDate()[ds]?.total || 0, gr = plantGrowth(sec);
-  const blooms = gr.full
-    ? `<div class="plant-blooms">${Array.from({ length: Math.min(gr.full, 6) }, () => plantSvg(pl, 4)).join('')}${gr.full > 6 ? '…' : ''} 満開 ${gr.full}本</div>` : '';
-  document.getElementById('plant-today').innerHTML = `${plantSvg(pl, gr.st)}
+  const blooms = gr.full ? `<div class="plant-blooms">🌸 満開 ${gr.full}本${gr.full + 1 > PLANT_MAX_DRAW ? `（鉢には${PLANT_MAX_DRAW}本まで表示）` : ''}</div>` : '';
+  document.getElementById('plant-today').innerHTML = `${plantsSvg(pl, growthStages(gr))}
     <div style="flex:1;min-width:0">
       <div class="plant-title">今日の植物${gr.full ? `（${gr.full + 1}本目）` : ''}</div>
       <div class="plant-name">${pl.name}</div>
@@ -1831,8 +1852,8 @@ function renderGarden() {
     if (dt > today && ds !== todayStr) break;
     const gr = plantGrowth(byDate[ds]?.total || 0);
     bloomed += gr.full;
-    // 1本でも満開なら満開の姿、まだなら育ち途中の姿
-    html += `<div class="garden-cell ${ds === gardenSel ? 'sel' : ''}" onclick="selectGarden('${ds}')">${plantSvg(plantForDate(ds), gr.full ? 4 : gr.st)}${gr.full > 1 ? `<b class="garden-badge">×${gr.full}</b>` : ''}<span>${d}日</span></div>`;
+    const stg = growthStages(gr);
+    html += `<div class="garden-cell ${ds === gardenSel ? 'sel' : ''}" onclick="selectGarden('${ds}')">${plantsSvg(plantForDate(ds), stg)}${stg.length > PLANT_MAX_DRAW ? `<b class="garden-badge">🌸${gr.full}</b>` : ''}<span>${d}日</span></div>`;
   }
   document.getElementById('garden-grid').innerHTML = html || '<div class="garden-sub">まだこの月の植物はありません</div>';
   const info = document.getElementById('garden-info');
