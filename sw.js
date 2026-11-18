@@ -1,6 +1,6 @@
 // 同じサイト内のファイル(index.html等)は「ネット優先」：
 //   オンラインなら常に最新版を取得し、オフライン時だけキャッシュを使う。
-// 外部CDNのライブラリは「キャッシュ優先」：バージョン固定なので変わらない。
+// 外部CDNのライブラリとGoogle Fontsは「キャッシュ優先」：変わらないのでオフラインでも使える。
 const CACHE = 'tangocho-v2';
 const CDN_URLS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
@@ -49,7 +49,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  if (CDN_URLS.includes(req.url)) {
+  if (CDN_URLS.includes(req.url) || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     // キャッシュ優先
     e.respondWith(
       caches.match(req).then(cached => cached || fetch(req).then(res => {

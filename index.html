@@ -24,7 +24,8 @@
     body.theme-cotton{--p1:#ff6fa3;--p2:#9ed9ff;--s1:#c4b5fd;--s2:#f0abfc;--bg:#fff0f8;--badge-bg:#ffe4f2;--badge-fg:#d946a8;--ul-border:#ff6fa3;--ul-hover:#ffe4f2;}
 
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 20px 40px;transition:background .4s;}
+    :root{--sys-font:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif;}
+    body{font-family:var(--app-font,var(--sys-font));background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 20px 40px;transition:background .4s;}
     .screen{display:none;width:100%;max-width:480px;flex-direction:column;align-items:center;}
     .screen.active{display:flex;}
     .last-updated{margin-top:28px;font-size:11px;color:var(--sub);text-align:center;opacity:.8;}
@@ -46,6 +47,14 @@
     .t-swatch{width:52px;height:52px;border-radius:50%;border:3px solid transparent;transition:border-color .2s,transform .2s;}
     .t-opt.active .t-swatch{border-color:var(--title);transform:scale(1.1);}
     .t-name{font-size:11px;color:var(--sub);font-weight:bold;}
+    button,input,textarea,select{font-family:inherit;}
+
+    /* ── font picker ── */
+    .font-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .font-opt{padding:10px 4px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--title);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;-webkit-tap-highlight-color:transparent;transition:border-color .15s;}
+    .font-opt.active{border-color:var(--p1);background:var(--badge-bg);}
+    .font-opt-sample{font-size:18px;line-height:1.3;}
+    .font-opt-name{font-size:10px;color:var(--sub);font-weight:bold;font-family:var(--sys-font);}
 
     /* ── auth panel ── */
     .auth-tabs{display:flex;background:var(--border);border-radius:10px;padding:3px;margin-bottom:20px;}
@@ -379,6 +388,10 @@
     </div>
     <div class="custom-preview-bar" id="custom-preview-bar" style="background:linear-gradient(135deg,#2193b0,#6dd5ed)"></div>
     <button class="custom-apply-btn" id="custom-apply-btn" onclick="applyCustomThemeFromPicker()" style="background:linear-gradient(135deg,#2193b0,#6dd5ed)">この色を適用</button>
+  </div>
+  <div class="bg-section">
+    <div class="fmt-label">フォント</div>
+    <div class="font-grid" id="font-grid"></div>
   </div>
   <div class="bg-section">
     <div class="fmt-label">背景画像</div>
@@ -805,7 +818,7 @@ function applyTheme(t) {
   localStorage.setItem('tc-theme', t);
 }
 function setTheme(t) { applyTheme(t); closeTheme(); }
-function openTheme()  { document.getElementById('t-ov').classList.add('open'); document.getElementById('t-panel').classList.add('open'); }
+function openTheme()  { renderFontGrid(); document.getElementById('t-ov').classList.add('open'); document.getElementById('t-panel').classList.add('open'); }
 function closeTheme() {
   document.getElementById('t-ov').classList.remove('open');
   document.getElementById('t-panel').classList.remove('open');
@@ -845,6 +858,61 @@ function applyCustomThemeFromPicker() {
   localStorage.setItem('tc-custom-c2',c2);
   closeTheme();
 }
+
+/* ── フォント ── */
+// family: Google Fontsの名前（nullは端末の標準フォント）
+const APP_FONTS = [
+  { id: 'default', name: '標準',         family: null },
+  { id: 'bizud',   name: 'UDゴシック',   family: 'BIZ UDPGothic',     weights: '400;700' },
+  { id: 'maru',    name: '丸ゴシック',   family: 'Zen Maru Gothic',   weights: '400;700' },
+  { id: 'mplus',   name: 'まるもじ',     family: 'M PLUS Rounded 1c', weights: '400;700' },
+  { id: 'kiwi',    name: 'キウイ丸',     family: 'Kiwi Maru',         weights: '400;500' },
+  { id: 'mincho',  name: '明朝',         family: 'Noto Serif JP',     weights: '400;700' },
+  { id: 'klee',    name: '教科書風',     family: 'Klee One',          weights: '400;600' },
+  { id: 'yomogi',  name: '手書き',       family: 'Yomogi',            weights: '400' },
+  { id: 'dot',     name: 'ドット',       family: 'DotGothic16',       weights: '400' },
+];
+const FONT_SAMPLE = 'あア字Aa';
+function addFontLink(id, href) {
+  if (document.getElementById(id)) return;
+  const l = document.createElement('link');
+  l.id = id; l.rel = 'stylesheet'; l.href = href;
+  document.head.appendChild(l);
+}
+function fontCssUrl(f) {
+  return 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(f.family).replace(/%20/g, '+')
+    + ':wght@' + f.weights + '&display=swap';
+}
+function applyFont(id) {
+  const f = APP_FONTS.find(x => x.id === id) || APP_FONTS[0];
+  const root = document.documentElement;
+  if (f.family) {
+    addFontLink('font-' + f.id, fontCssUrl(f));
+    root.style.setProperty('--app-font', `'${f.family}', var(--sys-font)`);
+  } else {
+    root.style.removeProperty('--app-font');
+  }
+  try { localStorage.setItem('tc-font', f.id); } catch {}
+  document.querySelectorAll('.font-opt').forEach(el => el.classList.toggle('active', el.dataset.font === f.id));
+}
+function renderFontGrid() {
+  const grid = document.getElementById('font-grid');
+  if (!grid) return;
+  const cur = (() => { try { return localStorage.getItem('tc-font') || 'default'; } catch { return 'default'; } })();
+  grid.innerHTML = APP_FONTS.map(f => {
+    // Google Fontsは文字ごとに分割配信されるので、見本の数文字ぶんしか通信しない
+    if (f.family) addFontLink('font-' + f.id, fontCssUrl(f));
+    const ff = f.family ? `'${f.family}', var(--sys-font)` : 'var(--sys-font)';
+    return `<button class="font-opt ${f.id === cur ? 'active' : ''}" data-font="${f.id}" onclick="applyFont('${f.id}')">
+      <span class="font-opt-sample" style="font-family:${ff}">${FONT_SAMPLE}</span>
+      <span class="font-opt-name">${f.name}</span></button>`;
+  }).join('');
+}
+(function initFont() {
+  let saved = 'default';
+  try { saved = localStorage.getItem('tc-font') || 'default'; } catch {}
+  applyFont(saved);
+})();
 
 /* ── Init theme ── */
 (function() {
